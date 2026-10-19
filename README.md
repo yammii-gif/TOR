@@ -1,6 +1,6 @@
 # Renal Smart CDSS — โรงพยาบาลมหาวิทยาลัยพะเยา
 
-ต้นแบบวิจัย Phase 1 ใช้ **SYNTHETIC DATA เท่านั้น** ห้ามใช้กับผู้ป่วยจริง ไม่มีขนาดยาที่ได้รับการรับรอง ไม่มีการเขียนกลับ HOSxP
+เป้าหมายโครงการคือช่วยแพทย์ตัดสินใจในห้องตรวจและให้เภสัชกรเสนอทางเลือกเมื่อยาขาดคลัง รุ่นปัจจุบันยังเป็น Phase 1 ใช้ **SYNTHETIC DATA เท่านั้น** จนผ่านการตรวจรับระบบสำหรับหน้างานจริง ไม่มีขนาดยาที่ได้รับการรับรองและไม่มีการเขียนกลับ HOSxP ดู [แผนเปิดใช้หน้างาน](docs/clinical-deployment.md)
 
 ## เปิดออนไลน์
 
@@ -31,7 +31,7 @@ npm ci
 npm run dev
 ```
 
-เปิด frontend port 3000 ผ่านระบบพัฒนาในเครื่อง เลือก physician และใช้รหัสผ่านที่ตั้ง ส่งข้อเสนอหรือ Override พร้อมเหตุผล จากนั้นออกจากระบบและเข้าเป็น pharmacist เพื่อตรวจ ยืนยัน ปฏิเสธ หรือขอข้อมูลเพิ่ม ตรวจ audit ด้วย pharmacist/admin และดู dashboard
+เปิด frontend port 3000 ผ่านระบบพัฒนาในเครื่อง เลือก physician และใช้รหัสผ่านที่ตั้ง กรอกข้อเสนอยาแล้วกดยืนยันโดยแพทย์ รายการที่มีในคลังยืนยันได้ทันทีในต้นแบบ ไม่รอเภสัชกรอนุมัติซ้ำ หากยาขาดคลัง (Sitagliptin ใน seed จำลอง) ให้เข้าเป็น pharmacist เพื่อเสนอจากยาที่มีในคลัง แล้วแพทย์เลือกหรือปฏิเสธและระบุวิธีใช้ด้วยตนเอง ตรวจ audit ด้วย pharmacist/admin และดู dashboard
 
 SQLite เก็บใน `/tmp/renal-smart.db` สำหรับเดโมชั่วคราว ใช้ PostgreSQL เมื่อทดสอบฐานข้อมูลถาวร: คัดลอก `.env.example` เป็น `.env` เปลี่ยนรหัสผ่าน แล้ว `docker compose up --build` PostgreSQL migrations/seed ตรวจสอบแล้ว; Docker image build ของแอปยังติด DNS ภายใน cloud builder
 
@@ -50,11 +50,11 @@ npm run build
 
 - Thai UI 12 เมนู พร้อม dashboard/filter/CSV export
 - FastAPI, SQLAlchemy models, Alembic initial migration, PostgreSQL config
-- คำนวณ Cockcroft–Gault, แปลงหน่วย SCr, ตรวจแล็บเก่า/อนาคต ข้อมูลไม่ครบ ไตไม่คงที่/ฟอกไต และการยืนยันน้ำหนัก
-- ข้อเสนอแพทย์และเภสัชกรตรวจอิสระ มี audit append-only ระดับ ORM
+- คำนวณ Cockcroft–Gault และ CKD-EPI 2021 eGFR จาก input จริง แยก reported eGFR จากแล็บ, แปลงหน่วย SCr, ตรวจแล็บเก่า/อนาคต ข้อมูลไม่ครบ ไตไม่คงที่/ฟอกไต และการยืนยันน้ำหนัก
+- แพทย์ยืนยันข้อเสนอตนเองได้ทันที; เภสัชกรเสนอทางเลือกกรณียาขาดคลัง มี audit append-only ระดับ ORM; historical SUBMITTED ยังรองรับการคืน/ปฏิเสธ
 - Session cookie HttpOnly, role checks, expiration, input validation
 - ฐานข้อมูลยา 10 รายการที่ยังไม่ยืนยัน, versioned draft rules, ปิดการอนุมัติ/เปิดใช้งานกฎ
-- DailyMed adapter เก็บ raw response/provenance เป็น DRAFT; licensed providers คืน LICENSE_REQUIRED
+- Evidence adapters: UpToDate Public Search, NIDDK, KDIGO, NICE, DailyMed, PubMed เก็บต้นฉบับ/checksum/เวลาเป็น DRAFT เมื่อดึงสำเร็จจริง; Full Clinical Topics/Lexidrug/Micromedex แยกเป็น LICENSE_REQUIRED; บันทึก network failure และ SOURCE_CONFLICT
 - Desktop communication API และ synthetic screenshot OCR script
 
 ## สิ่งที่จำลอง / ยังไม่ทำ
@@ -74,7 +74,7 @@ npm run build
 
 `scripts/install.sh` เตรียม dependencies, migrations, seed และ production build; `scripts/start-demo.sh` เริ่มทั้งสองบริการ ถ้าไม่ได้ตั้ง DEMO_PASSWORD จะสร้างรหัสสุ่มไว้ในไฟล์ local mode 600 และแสดงเฉพาะตำแหน่งไฟล์ ห้ามส่งค่ารหัสผ่านผ่านแชตหรือ logs
 
-Browser regression: `cd frontend && DEMO_PASSWORD=<รหัสที่ตั้งในเครื่อง> npx playwright test` ต้องมี Chromium (`CHROMIUM_PATH` default `/usr/bin/chromium`) ครอบคลุมแพทย์ส่งข้อเสนอ เภสัชกรปฏิเสธ และ audit
+Browser regression: `cd frontend && DEMO_PASSWORD=<รหัสที่ตั้งในเครื่อง> npx playwright test` ต้องมี Chromium (`CHROMIUM_PATH` default `/usr/bin/chromium`) ครอบคลุมการคำนวณ แพทย์ยืนยัน ยาขาดคลัง→เภสัชกรเสนอ→แพทย์เลือก audit และสถานะสิทธิ์แหล่งข้อมูล
 
 ตรวจสอบแล้วใน cloud instance: SQLite และ PostgreSQL migrations/seed, backend safety tests, lint/typecheck/build, synthetic OCR และ browser workflow. Docker image build มีข้อจำกัด DNS/เครือข่ายของ builder ใน cloud นี้; ไม่ใช่ผลทดสอบ Compose แบบครบระบบ
 
@@ -85,3 +85,9 @@ Browser regression: `cd frontend && DEMO_PASSWORD=<รหัสที่ตั�
 Frontend พอร์ต 3000 ใช้ `/api/*` บน origin เดียวกัน แล้วส่งต่อไป Backend ภายใน (`BACKEND_URL` default `http://127.0.0.1:8000`) Browser จึงไม่ต้องเข้าถึงพอร์ต 8000 โดยตรง และ session cookies ใช้กับ origin ของเว็บได้ Docker Compose ใช้ `BACKEND_URL=http://backend:8000`.
 
 Cloud onboarding UI ของเซสชันนี้ไม่มี Preview/port forwarding ให้ผู้ใช้กดเว็บจากภายนอก การรันบนพอร์ต 3000 ภายใน cloud ไม่ทำให้เกิด public URL โดยอัตโนมัติ ต้องใช้ workspace ที่รองรับ Preview หรือ hosting ที่คุณกำหนดไว้ หากเปิดผ่าน HTTPS ให้ตั้ง `COOKIE_SECURE=true` ก่อนเริ่ม Backend.
+
+สูตร ขอบเขต และกรณีทดสอบการคำนวณ: [renal calculations](docs/renal-calculations.md)
+
+อ่านแถบแล็บในเครื่อง: `python desktop/lab_region.py` ดู [Desktop Agent](docs/desktop-agent.md) ไม่อัปโหลดภาพ ไม่จับหน้าต่างอัตโนมัติ และไม่ยืนยันตัวผู้ป่วยจากแถบแล็บเพียงอย่างเดียว
+
+นโยบายแหล่งอ้างอิงและโครงสร้างกฎปรับยา: [renal reference policy](docs/renal-reference-policy.md)

@@ -30,3 +30,13 @@
 Backend 29 tests ผ่าน รวม HMAC session ข้าม memory stores, tampered/expired tokens และ missing session secret. Frontend lint/typecheck/normal build และ static export ผ่าน. Browser tests 2 รายการผ่านบน static export + Python adapter ใน instance เดียว (แพทย์ส่งข้อเสนอ → เภสัชกร reject → audit และ cookie login/logout). Multi-instance storage consistency ไม่ได้รับการรับรอง; UI มีคำเตือน ephemeral serverless simulation. ข้อมูลไม่คงทนเหมือน shared database
 
 การเผยแพร่ environment สำเร็จและค่าที่อ่านได้มี vercel.com/api.vercel.com แต่ runtime ยังตอบ CONNECT proxy 403 ทั้งสองโดเมน จึงยังไม่สามารถทำ CLI login/deploy จริง และยังไม่มี Vercel deployment URL ที่ตรวจสอบแล้ว ไม่มีการขอให้เพิ่มโดเมนเดิมซ้ำหรือส่ง credentials ผ่านแชต
+
+## การปรับ workflow ห้องตรวจและ evidence infrastructure ล่าสุด
+
+- Backend 74 tests ผ่าน: CG/CKD-EPI2021, unit conversion, lab validity, missing data, renal guards, rule permissions/versioning, physician immediate finalization, stock exception alternatives/decline/race check, legacy pharmacist rejection, roles/audit, licensed/public evidence separation, checksum/conflict และ local ROI safety gates
+- Frontend lint, typecheck, production build และ Vercel static export ผ่าน
+- Playwright 5 tests ผ่านบน static export + Python adapter: physician immediate finalization, same-origin session, renal recalc/stale result, stock exception→pharmacist proposal→physician choice, licensed-source status
+- SQLite migration 002→004 ทดสอบกับฐานข้อมูล schema เก่าและรักษารายการเดิม; PostgreSQL16 upgrade head + seed ผ่าน
+- Local ROI tests ใช้ภาพเปล่า/reader fixture และตัวเลขสังเคราะห์เท่านั้น ไม่ใช่การวัดความแม่นยำจากภาพผู้ป่วยจริง ไม่มีการทดสอบ Windows live capture
+- URL UpToDate Public Search ที่ผู้ใช้ระบุถูก proxy ตอบ CONNECT403 ไม่มีบทความปัจจุบันถูกดึงสำเร็จ ไม่ถือว่าเป็นการตอบให้ล็อกอินจาก UpToDate เอง แหล่ง public เพิ่มใน configuration draft; draft ต้อง publish ก่อนจึงจะมีผลและยังไม่รับประกัน runtime egress
+- ยังไม่มี production identity, approved active drug rules, real HOSxP/LIS integration หรือการตรวจรับ deployment Vercel จากภายนอก

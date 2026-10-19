@@ -1,28 +1,27 @@
 import {test,expect} from '@playwright/test';
-test('Thai synthetic physician to pharmacist workflow',async({page})=>{
+test('physician finalizes immediately and pharmacist sees only stock exceptions',async({page})=>{
  await page.goto('/');
  await expect(page.getByText('DEMO / SIMULATION')).toBeVisible();
  await page.locator('input[type=password]').fill(process.env.DEMO_PASSWORD||'renal-demo-local');
  await page.getByRole('button',{name:'เข้าสู่ระบบ',exact:true}).click();
  await expect(page.getByText('ผู้ใช้งาน: physician')).toBeVisible();
  await page.getByRole('button',{name:/พื้นที่ทำงานแพทย์/}).click();
- await page.getByRole('button',{name:'คำนวณ CrCl'}).click();
- await expect(page.locator('pre')).toContainText('35.42');
+ await page.getByRole('button',{name:'คำนวณ CrCl และ eGFR'}).click();
+ await expect(page.getByTestId('crcl-result')).toHaveText('35.42');
+ await expect(page.getByTestId('egfr-result')).toHaveText('38.43');
  await page.getByLabel('ข้อเสนอแพทย์ (ไม่มีคำแนะนำขนาดยาจากระบบ)').fill('ข้อเสนอจำลองเพื่อทบทวน');
  await page.getByLabel('เหตุผล / หมายเหตุ').fill('กรณีสังเคราะห์สำหรับการทดสอบ');
- await page.getByRole('button',{name:'ส่งข้อเสนอให้เภสัชกร'}).click();
+ await page.getByRole('button',{name:'ยืนยันการตัดสินใจของแพทย์'}).click();
  await expect(page.getByRole('status')).toHaveText('ดำเนินการสำเร็จ');
+ await expect(page.getByText('แพทย์ยืนยันการตัดสินใจแล้ว').last()).toBeVisible();
  await page.getByRole('button',{name:'ออกจากระบบ'}).click();
  await page.getByLabel('บทบาท').selectOption('pharmacist');
  await page.locator('input[type=password]').fill(process.env.DEMO_PASSWORD||'renal-demo-local');
  await page.getByRole('button',{name:'เข้าสู่ระบบ',exact:true}).click();
- await page.getByRole('button',{name:/ตรวจสอบโดยเภสัชกร/}).click();
- const entry=page.locator('article').last();
- await entry.getByLabel('ผลการตรวจ / เหตุผล').fill('ปฏิเสธรายการจำลองเพื่อขอข้อมูลเพิ่มเติม');
- await entry.getByRole('button',{name:'REJECTED',exact:true}).click();
- await expect(page.locator('article').last()).toContainText('REJECTED');
+ await page.getByRole('button',{name:/เภสัชกร: ยาขาดคลัง/}).click();
+ await expect(page.getByText('ไม่มียาขาดคลังที่รอเสนอทางเลือก')).toBeVisible();
  await page.getByRole('button',{name:/ประวัติการตรวจสอบ/}).click();
- await expect(page.locator('main')).toContainText('PHARMACIST_REJECTED');
+ await expect(page.locator('main')).toContainText('PHYSICIAN_FINALIZED');
 });
 
 test('same-origin API forwards authentication cookies and logout',async({request})=>{
@@ -38,4 +37,76 @@ test('same-origin API forwards authentication cookies and logout',async({request
  expect((await patients.json())[0].id).toBe('SYN-001');
  expect((await request.post('/api/auth/logout',{data:{}})).status()).toBe(200);
  expect((await request.get('/api/patients')).status()).toBe(401);
+});
+
+
+test('renal values recalculate from inputs and stale results are cleared',async({page})=>{
+ await page.goto('/');
+ await page.locator('input[type=password]').fill(process.env.DEMO_PASSWORD||'renal-demo-local');
+ await page.getByRole('button',{name:'เข้าสู่ระบบ',exact:true}).click();
+ await expect(page.getByText('ผู้ใช้งาน: physician')).toBeVisible();
+ await page.getByRole('button',{name:/คำนวณการทำงานของไต/}).click();
+ const calculate=page.getByRole('button',{name:'คำนวณ CrCl และ eGFR'});
+ await calculate.click();
+ await expect(page.getByTestId('crcl-result')).toHaveText('35.42');
+ await expect(page.getByTestId('egfr-result')).toHaveText('38.43');
+ await page.getByLabel('eGFR จากแล็บ', {exact:false}).fill('99');
+ await expect(page.getByTestId('egfr-result')).toHaveCount(0);
+ await calculate.click();
+ await expect(page.getByTestId('egfr-result')).toHaveText('38.43');
+ await expect(page.getByText('eGFR จากแล็บที่กรอก: 99 mL/min/1.73m²')).toBeVisible();
+ await page.getByLabel('SCr',{exact:true}).fill('132.6');
+ await page.getByLabel('หน่วย SCr',{exact:true}).selectOption('µmol/L');
+ await calculate.click();
+ await expect(page.getByTestId('egfr-result')).toHaveText('38.43');
+ await expect(page.getByTestId('crcl-result')).toHaveText('35.42');
+ await page.getByLabel('การฟอกไต',{exact:true}).selectOption('unknown');
+ await calculate.click();
+ await expect(page.getByTestId('egfr-result')).toHaveCount(0);
+ await expect(page.getByRole('alert').filter({hasText:'ต้องทบทวนภาวะไต'})).toContainText('ต้องทบทวนโดยผู้เชี่ยวชาญ');
+});
+
+
+test('out-of-stock request goes to pharmacist and physician makes the final choice',async({page,request})=>{
+ const password=process.env.DEMO_PASSWORD||'renal-demo-local';
+ await request.post('/api/auth/login',{data:{role:'physician',password}});
+ const created=await request.post('/api/prescriptions',{data:{drug:'Sitagliptin',proposal:'ข้อเสนอเดิมในข้อมูลสังเคราะห์',decision:'MODIFY'}});
+ expect(created.status()).toBe(200);
+ const record=await created.json();expect(record.status).toBe('WAITING_STOCK_ALTERNATIVE');
+ await page.goto('/');
+ await page.getByLabel('บทบาท').selectOption('pharmacist');
+ await page.locator('input[type=password]').fill(password);
+ await page.getByRole('button',{name:'เข้าสู่ระบบ',exact:true}).click();
+ await expect(page.getByText('ผู้ใช้งาน: pharmacist')).toBeVisible();
+ await page.getByRole('button',{name:/เภสัชกร: ยาขาดคลัง/}).click();
+ const queue=page.getByTestId(`stock-request-${record.id}`);
+ await queue.getByLabel('ยาที่มีในคลังจำลอง',{exact:true}).selectOption('1');
+ await queue.getByLabel('เหตุผลและข้อควรพิจารณาของเภสัชกร').fill('ข้อเสนอจำลองสำหรับแพทย์พิจารณาข้อบ่งใช้และ renal context');
+ await queue.getByRole('button',{name:'เสนอทางเลือกให้แพทย์'}).click();
+ await expect(queue).toContainText('PROPOSED');
+ await page.getByRole('button',{name:'ออกจากระบบ'}).click();
+ await page.getByLabel('บทบาท').selectOption('physician');
+ await page.locator('input[type=password]').fill(password);
+ await page.getByRole('button',{name:'เข้าสู่ระบบ',exact:true}).click();
+ await expect(page.getByText('ผู้ใช้งาน: physician')).toBeVisible();
+ await page.getByRole('button',{name:/พื้นที่ทำงานแพทย์/}).click();
+ const decision=page.getByTestId(`physician-record-${record.id}`);
+ await decision.getByLabel('ข้อเสนอใหม่ของแพทย์').fill('ข้อเสนอใหม่โดยแพทย์ในข้อมูลสังเคราะห์ ไม่ใช้ขนาดยาจากระบบ');
+ await decision.getByLabel('เหตุผลการเลือกหรือไม่เลือก').fill('แพทย์ทบทวนกรณีจำลองแล้ว');
+ await decision.getByRole('button',{name:'เลือกยานี้และยืนยันโดยแพทย์'}).click();
+ await expect(decision).toContainText('แพทย์เปลี่ยนเป็นรายการใหม่แล้ว');
+ await expect(page.getByText('แพทย์ยืนยันการตัดสินใจแล้ว').first()).toBeVisible();
+});
+
+test('knowledge base shows licensed source restriction without claiming retrieval',async({page})=>{
+ await page.goto('/');
+ await page.locator('input[type=password]').fill(process.env.DEMO_PASSWORD||'renal-demo-local');
+ await page.getByRole('button',{name:'เข้าสู่ระบบ',exact:true}).click();
+ await expect(page.getByText('ผู้ใช้งาน: physician')).toBeVisible();
+ await page.getByRole('button',{name:/ฐานความรู้ยา/}).click();
+ const source=page.getByTestId('source-uptodate');
+ await expect(source).toContainText('LICENSE_REQUIRED');
+ await source.getByRole('button',{name:'ตรวจสถานะสิทธิ์'}).click();
+ await expect(page.getByRole('heading',{name:'UpToDate — Full Clinical Topics · LICENSE_REQUIRED'}).first()).toBeVisible();
+ await expect(page.getByText('ยังไม่มีการเชื่อมต่อที่ได้รับอนุญาตของสถาบัน ไม่มีการดึงเนื้อหาหรือข้ามการเข้าสู่ระบบ')).toBeVisible();
 });

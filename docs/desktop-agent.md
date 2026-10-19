@@ -21,3 +21,11 @@ API นี้เป็น synthetic demo transport เท่านั้น ไ�
 OCR confidence threshold เป็นเพียงตัวอย่าง ต้องประเมินระดับ field กับ ground truth ตรวจ decimal/unit/time/sex/HN วนซ้ำสองเฟรมเมื่อ identity เปลี่ยน quarantine และขอคนยืนยัน ห้ามจับภาพคนไข้จริงจนผ่าน consent, PDPA, security review และ validation ของ HOSxP v4 รุ่นที่ติดตั้ง
 
 ควรใช้ read-only structured HOSxP/LIS adapter ที่ได้รับอนุญาตก่อน OCR ไม่มี claim ว่าทดสอบ HOSxP จริงแล้ว
+
+## อ่านแถบแล็บในเครื่อง (ไม่อัปโหลด)
+
+รัน `python desktop/lab_region.py` บนเครื่องที่ติดตั้ง Python, Pillow, pytesseract, Tesseract และ Tkinter แล้วเลือก PNG เฉพาะแถบแล็บ ภาพเปิดใน memory และไม่มีการบันทึกซ้ำหรือส่งเครือข่าย ผลแสดงเฉพาะหน้าต่าง local และล้างได้ ปิดหน้าต่างเพื่อล้าง memory ของโปรเซส
+
+Profile `hosxp-lab-strip-1395x224-v1` เก็บเฉพาะพิกัดช่อง BW, Height, Cr, eGFR จากรูปแบบที่ผู้ใช้ระบุ ไม่เก็บภาพหรือค่าผู้ป่วยใน repository ขนาดและตำแหน่งต้องตรง 1395×224; หาก resize, เปลี่ยน DPI หรือ layout ต้องปรับ profile และตรวจรับใหม่ ความมั่นใจ OCR ไม่ได้ยืนยันว่าช่องที่อ่านถูกคนหรือถูกแล็บ ตัวอ่านนี้ยังไม่จับหน้าต่าง Windows อัตโนมัติและยังไม่ผ่านการทดสอบกับ HOSxP จริง
+
+ไม่อนุมานหน่วย Cr, หน่วย eGFR, HN, อายุ, sex หรือเวลาเก็บแล็บจากตัวเลขในแถบนี้ ไม่สลับ BSA/RR โดยเดา และไม่ส่งค่าจากตัวอ่านไป calculator หรือเว็บสาธารณะอัตโนมัติ ทุกผลเป็น `VERIFICATION_REQUIRED` จนตรวจจับคู่ผู้ป่วย หน่วย และเวลาจากแหล่งต้นทางที่เชื่อถือได้ ตัวอย่างทดสอบเป็นค่าที่สร้างใหม่ทั้งหมด

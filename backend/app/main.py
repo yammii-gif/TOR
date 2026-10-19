@@ -4,10 +4,12 @@ from fastapi import FastAPI, Depends, HTTPException, Response, Cookie
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, func
 from .db import Session, Drug, Rule, Prescription, Audit, Patient
 from .clinical import RenalInput, calculate, evaluate
 from . import session_tokens
+from .rule_specification import renal_rule_template
+from .stock_workflow import make_stock_router, prescription_view, PENDING_STOCK
 app=FastAPI(title='Renal Smart CDSS — SYNTHETIC DATA')
 app.add_middleware(CORSMiddleware,allow_origins=[os.getenv('FRONTEND_ORIGIN','http://localhost:3000')],allow_credentials=True,allow_methods=['GET','POST'],allow_headers=['Content-Type'])
 sessions={}
@@ -61,7 +63,7 @@ class Assessment(BaseModel):
 def assess(p:Assessment,u=Depends(user)): return evaluate(p.patient,indication=p.indication)
 @app.get('/drugs')
 def drugs(u=Depends(user)):
-    with Session() as s: return [{'id':d.id,'name':d.name,'status':d.status,'evidence':json.loads(d.evidence)} for d in s.query(Drug).all()]
+    with Session() as s: return [{'id':d.id,'name':d.name,'status':d.status,'stock_status':d.stock_status,'evidence':json.loads(d.evidence)} for d in s.query(Drug).all()]
 class Decision(BaseModel):
     drug:str=Field(min_length=1,max_length=100)
     proposal:str=Field(min_length=1,max_length=1000)
@@ -72,6 +74,7 @@ class Decision(BaseModel):
 def prescribe(p:Decision,u=Depends(roles('physician'))):
     if p.decision not in ['MODIFY','OVERRIDE','ACCEPT','ALTERNATIVE']: raise HTTPException(422,'Invalid decision')
     if p.decision in ['ACCEPT','ALTERNATIVE']: raise HTTPException(409,'No validated recommendation or alternative available')
+    if not p.proposal.strip(): raise HTTPException(422,'กรอกข้อเสนอแพทย์ก่อนยืนยัน')
     if p.decision=='OVERRIDE' and not p.reason.strip(): raise HTTPException(422,'ต้องระบุเหตุผล')
     with Session.begin() as s:
         source=s.get(Patient,'SYN-001')
@@ -79,12 +82,18 @@ def prescribe(p:Decision,u=Depends(roles('physician'))):
         snapshot=json.loads(source.source)
         if p.patient_input: snapshot.update(p.patient_input.model_dump(mode='json'))
         snapshot['calculation']=calculate(RenalInput(**snapshot))
-        record=Prescription(**p.model_dump(exclude={'patient_input'}),source_snapshot=json.dumps(snapshot)); s.add(record); s.flush()
-        audit(s,u,'PHYSICIAN_'+p.decision,'DRAFT','SUBMITTED',p.reason,record.id)
+        drug=s.query(Drug).filter(func.lower(Drug.name)==p.drug.strip().lower()).first()
+        if not drug: raise HTTPException(422,'เลือกยาจากรายการคลังจำลองเพื่อยืนยันสถานะสต็อก')
+        if snapshot['calculation']['status']!='SIMULATION' and p.decision!='OVERRIDE':
+            raise HTTPException(409,'ตรวจสอบข้อมูลไตก่อนยืนยัน หรือบันทึก Override พร้อมเหตุผล')
+        status='PHYSICIAN_FINALIZED' if drug.stock_status=='IN_STOCK' else 'WAITING_STOCK_ALTERNATIVE'
+        values=p.model_dump(exclude={'patient_input'});values['drug']=drug.name
+        record=Prescription(**values,source_snapshot=json.dumps(snapshot),status=status,finalized_at=datetime.now(timezone.utc) if status=='PHYSICIAN_FINALIZED' else None); s.add(record); s.flush()
+        audit(s,u,'PHYSICIAN_'+('FINALIZED' if status=='PHYSICIAN_FINALIZED' else 'STOCK_REQUEST'),'DRAFT',status,p.reason,record.id)
         return {'id':record.id,'status':record.status}
 @app.get('/prescriptions')
 def prescriptions(u=Depends(roles('physician','pharmacist','admin'))):
-    with Session() as s: return [dict(id=p.id,patient=p.patient,drug=p.drug,proposal=p.proposal,decision=p.decision,reason=p.reason,status=p.status,created_at=p.created_at,source_snapshot=json.loads(p.source_snapshot)) for p in s.query(Prescription).all()]
+    with Session() as s: return [prescription_view(s,p) for p in s.query(Prescription).order_by(Prescription.id).all()]
 class Review(BaseModel):
     action:str
     comments:str=Field(min_length=1,max_length=2000)
@@ -106,9 +115,10 @@ def rules(u=Depends(user)):
 @app.post('/rules/{drug_id}/draft')
 def draft(drug_id:int,u=Depends(roles('pharmacist','admin'))):
     with Session.begin() as s:
-        if not s.get(Drug,drug_id): raise HTTPException(404)
+        drug=s.get(Drug,drug_id)
+        if not drug: raise HTTPException(404)
         version=s.query(Rule).filter_by(drug_id=drug_id).count()+1
-        r=Rule(drug_id=drug_id,version=version);s.add(r);s.flush();audit(s,u,'RULE_DRAFT','NONE','DRAFT');return {'id':r.id,'version':version}
+        r=Rule(drug_id=drug_id,version=version,specification=json.dumps(renal_rule_template(drug.name)));s.add(r);s.flush();audit(s,u,'RULE_DRAFT','NONE','DRAFT');return {'id':r.id,'version':version}
 @app.post('/rules/{id}/transition')
 def transition(id:int,p:Review,u=Depends(roles('pharmacist','admin'))):
     transitions={'DRAFT':'PENDING_REVIEW','PENDING_REVIEW':'APPROVED','APPROVED':'ACTIVE','ACTIVE':'RETIRED'}
@@ -139,7 +149,7 @@ def analytics(start:str|None=None,end:str|None=None,department:str|None=None,u=D
         except ValueError:raise HTTPException(422,'Invalid date')
         if department:q=q.filter_by(department=department)
         rows=q.all(); n=len(rows)
-        return {'label':'SYNTHETIC DATA','screened':n,'override_rate':sum(r.decision=='OVERRIDE' for r in rows)/n if n else 0,'verification_rate':sum(r.status=='VERIFIED' for r in rows)/n if n else 0,'renal_alerts':None,'dose_adjustments':0,'alternatives':0,'acceptance_rate':None,'medication_error_rate':None,'ocr_accuracy':None,'review_time':None,'satisfaction':None,'note':'null = ยังไม่มีข้อมูลที่วัดได้'}
+        return {'label':'SYNTHETIC DATA','screened':n,'physician_finalized':sum(r.status=='PHYSICIAN_FINALIZED' for r in rows),'stock_pending':sum(r.status in PENDING_STOCK for r in rows),'stock_alternatives_selected':sum(r.stock_alternative_id is not None for r in rows),'override_rate':sum(r.decision=='OVERRIDE' for r in rows)/n if n else 0,'verification_rate':sum(r.status=='VERIFIED' for r in rows)/n if n else 0,'renal_alerts':None,'dose_adjustments':0,'alternatives':0,'acceptance_rate':None,'medication_error_rate':None,'ocr_accuracy':None,'review_time':None,'satisfaction':None,'note':'null = ยังไม่มีข้อมูลที่วัดได้'}
 @app.get('/analytics/export')
 def export(u=Depends(roles('researcher','admin'))):
     import csv,io
@@ -160,3 +170,7 @@ def retrieve(id:int,u=Depends(roles('pharmacist','admin'))):
         drug.evidence=json.dumps(evidence);drug.status='PENDING_CLINICAL_VALIDATION'
         audit(s,u,'EVIDENCE_RETRIEVAL','NONE','DRAFT',drug.name)
         return evidence
+
+app.include_router(make_stock_router(roles,audit))
+from .evidence_sources import make_evidence_router
+app.include_router(make_evidence_router(roles,audit,user))
