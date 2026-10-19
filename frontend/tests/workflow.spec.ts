@@ -1,0 +1,41 @@
+import {test,expect} from '@playwright/test';
+test('Thai synthetic physician to pharmacist workflow',async({page})=>{
+ await page.goto('/');
+ await expect(page.getByText('DEMO / SIMULATION')).toBeVisible();
+ await page.locator('input[type=password]').fill(process.env.DEMO_PASSWORD||'renal-demo-local');
+ await page.getByRole('button',{name:'เข้าสู่ระบบ',exact:true}).click();
+ await expect(page.getByText('ผู้ใช้งาน: physician')).toBeVisible();
+ await page.getByRole('button',{name:/พื้นที่ทำงานแพทย์/}).click();
+ await page.getByRole('button',{name:'คำนวณ CrCl'}).click();
+ await expect(page.locator('pre')).toContainText('35.42');
+ await page.getByLabel('ข้อเสนอแพทย์ (ไม่มีคำแนะนำขนาดยาจากระบบ)').fill('ข้อเสนอจำลองเพื่อทบทวน');
+ await page.getByLabel('เหตุผล / หมายเหตุ').fill('กรณีสังเคราะห์สำหรับการทดสอบ');
+ await page.getByRole('button',{name:'ส่งข้อเสนอให้เภสัชกร'}).click();
+ await expect(page.getByRole('status')).toHaveText('ดำเนินการสำเร็จ');
+ await page.getByRole('button',{name:'ออกจากระบบ'}).click();
+ await page.getByLabel('บทบาท').selectOption('pharmacist');
+ await page.locator('input[type=password]').fill(process.env.DEMO_PASSWORD||'renal-demo-local');
+ await page.getByRole('button',{name:'เข้าสู่ระบบ',exact:true}).click();
+ await page.getByRole('button',{name:/ตรวจสอบโดยเภสัชกร/}).click();
+ const entry=page.locator('article').last();
+ await entry.getByLabel('ผลการตรวจ / เหตุผล').fill('ปฏิเสธรายการจำลองเพื่อขอข้อมูลเพิ่มเติม');
+ await entry.getByRole('button',{name:'REJECTED',exact:true}).click();
+ await expect(page.locator('article').last()).toContainText('REJECTED');
+ await page.getByRole('button',{name:/ประวัติการตรวจสอบ/}).click();
+ await expect(page.locator('main')).toContainText('PHARMACIST_REJECTED');
+});
+
+test('same-origin API forwards authentication cookies and logout',async({request})=>{
+ const health=await request.get('/api/health');
+ expect(health.status()).toBe(200);
+ expect((await health.json()).mode).toBe('SYNTHETIC DATA');
+ expect((await request.get('/api/patients')).status()).toBe(401);
+ const login=await request.post('/api/auth/login',{data:{role:'physician',password:process.env.DEMO_PASSWORD||'renal-demo-local'}});
+ expect(login.status()).toBe(200);
+ expect(login.headers()['set-cookie']).toContain('HttpOnly');
+ const patients=await request.get('/api/patients');
+ expect(patients.status()).toBe(200);
+ expect((await patients.json())[0].id).toBe('SYN-001');
+ expect((await request.post('/api/auth/logout',{data:{}})).status()).toBe(200);
+ expect((await request.get('/api/patients')).status()).toBe(401);
+});
