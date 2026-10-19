@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: renal-smart-cdss-demo
+    runtime: python
+    plan: free
+    buildCommand: bash scripts/build-online.sh
+    startCommand: bash scripts/start-online.sh
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.11
+      - key: NODE_VERSION
+        value: 24.19.0
+      - key: DEMO_PASSWORD
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: BACKEND_URL
+        value: http://127.0.0.1:8000
+      - key: DATABASE_URL
+        value: sqlite:////tmp/renal-smart.db
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"

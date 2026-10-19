@@ -20,3 +20,7 @@
 - Restart frontend/backend ผ่าน `scripts/start-demo.sh` แล้ว; frontend HTTP 200 และ `/api/health` คืน SYNTHETIC DATA
 - เพิ่ม same-origin API proxy พร้อม forwarded HttpOnly login/logout cookie และ Docker backend hostname config
 - Environment นี้ไม่มี Preview/port-forwarding tool และไม่มี desktop display ที่ผู้ใช้เปิดใช้งานได้ จึงยังไม่มี public URL สำหรับทดลองจากนอก cloud; ไม่อ้างว่าลิงก์ localhost เป็นลิงก์สาธารณะ
+
+## Render deployment preparation
+
+เพิ่ม `render.yaml` และ scripts สำหรับ native Python web service ที่รัน Next.js/FastAPI ในพอร์ตภายนอกเดียว ทดสอบ `build-online.sh` ผ่านครบ และ `start-online.sh` ผ่านด้วยพอร์ต web/backend แยกจากเดโมเดิม SQLite ใหม่ถูก migrate/seed อัตโนมัติ, `/api/health` ตอบ SYNTHETIC DATA, Playwright 2 tests ผ่านผ่าน startup นี้ และ backend 23 tests ผ่าน ไม่มีการ deploy เข้าบัญชี Render จริง เนื่องจากไม่ได้เชื่อมบัญชี/credential; จึงยังไม่มี public service URL และยังไม่ได้ตรวจ cold start บน Render
