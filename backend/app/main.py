@@ -7,11 +7,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from .db import Session, Drug, Rule, Prescription, Audit, Patient
 from .clinical import RenalInput, calculate, evaluate
+from . import session_tokens
 app=FastAPI(title='Renal Smart CDSS — SYNTHETIC DATA')
 app.add_middleware(CORSMiddleware,allow_origins=[os.getenv('FRONTEND_ORIGIN','http://localhost:3000')],allow_credentials=True,allow_methods=['GET','POST'],allow_headers=['Content-Type'])
 sessions={}
 def user(session: str|None=Cookie(default=None)):
-    entry=sessions.get(session or '')
+    entry=session_tokens.verify(session or '') if session_tokens.enabled() else sessions.get(session or '')
     if not entry or entry['expires']<datetime.now(timezone.utc): raise HTTPException(401,'กรุณาเข้าสู่ระบบ')
     return entry
 
@@ -31,8 +32,13 @@ def login(p:Login,response:Response):
     expected=os.getenv('DEMO_PASSWORD')
     if not expected: raise HTTPException(503,'ตั้งค่า DEMO_PASSWORD ก่อนเริ่มใช้งาน')
     if p.role not in ['physician','pharmacist','admin','researcher'] or not secrets.compare_digest(p.password,expected): raise HTTPException(401,'ข้อมูลเข้าสู่ระบบไม่ถูกต้อง')
-    token=secrets.token_urlsafe(32)
-    sessions[token]={'name':'demo-'+p.role,'role':p.role,'expires':datetime.now(timezone.utc)+timedelta(hours=4)}
+    entry={'name':'demo-'+p.role,'role':p.role,'expires':datetime.now(timezone.utc)+timedelta(hours=4)}
+    if session_tokens.enabled():
+        try: token=session_tokens.issue(entry)
+        except ValueError: raise HTTPException(503,'ตั้งค่า SESSION_SECRET อย่างน้อย 32 ตัวอักษร')
+    else:
+        token=secrets.token_urlsafe(32)
+        sessions[token]=entry
     response.set_cookie('session',token,httponly=True,samesite='strict',secure=os.getenv('COOKIE_SECURE','false')=='true',max_age=14400)
     return {'role':p.role,'mode':'SIMULATION'}
 @app.post('/auth/logout')

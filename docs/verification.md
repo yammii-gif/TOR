@@ -24,3 +24,9 @@
 ## Render deployment preparation
 
 เพิ่ม `render.yaml` และ scripts สำหรับ native Python web service ที่รัน Next.js/FastAPI ในพอร์ตภายนอกเดียว ทดสอบ `build-online.sh` ผ่านครบ และ `start-online.sh` ผ่านด้วยพอร์ต web/backend แยกจากเดโมเดิม SQLite ใหม่ถูก migrate/seed อัตโนมัติ, `/api/health` ตอบ SYNTHETIC DATA, Playwright 2 tests ผ่านผ่าน startup นี้ และ backend 23 tests ผ่าน ไม่มีการ deploy เข้าบัญชี Render จริง เนื่องจากไม่ได้เชื่อมบัญชี/credential; จึงยังไม่มี public service URL และยังไม่ได้ตรวจ cold start บน Render
+
+## Vercel serverless preparation
+
+Backend 29 tests ผ่าน รวม HMAC session ข้าม memory stores, tampered/expired tokens และ missing session secret. Frontend lint/typecheck/normal build และ static export ผ่าน. Browser tests 2 รายการผ่านบน static export + Python adapter ใน instance เดียว (แพทย์ส่งข้อเสนอ → เภสัชกร reject → audit และ cookie login/logout). Multi-instance storage consistency ไม่ได้รับการรับรอง; UI มีคำเตือน ephemeral serverless simulation. ข้อมูลไม่คงทนเหมือน shared database
+
+การเผยแพร่ environment สำเร็จและค่าที่อ่านได้มี vercel.com/api.vercel.com แต่ runtime ยังตอบ CONNECT proxy 403 ทั้งสองโดเมน จึงยังไม่สามารถทำ CLI login/deploy จริง และยังไม่มี Vercel deployment URL ที่ตรวจสอบแล้ว ไม่มีการขอให้เพิ่มโดเมนเดิมซ้ำหรือส่ง credentials ผ่านแชต

@@ -69,3 +69,30 @@ def test_rule_review_cannot_approve():
     c=client('pharmacist');r=c.post('/rules/1/draft').json()
     assert c.post(f"/rules/{r['id']}/transition",json={'action':'PENDING_REVIEW','comments':'review'}).status_code==200
     assert c.post(f"/rules/{r['id']}/transition",json={'action':'APPROVED','comments':'unvalidated'}).status_code==409
+
+@pytest.mark.parametrize('role',['physician','pharmacist','admin','researcher'])
+def test_signed_session_survives_process_memory_loss(monkeypatch,role):
+    from app import main
+    monkeypatch.setenv('SERVERLESS_DEMO','true')
+    monkeypatch.setenv('SESSION_SECRET','synthetic-test-session-key-32-chars-minimum')
+    c=client(role);main.sessions.clear()
+    assert c.get('/patients').status_code==200
+    if role!='physician':
+        assert c.post('/prescriptions',json={'drug':'Metformin','proposal':'demo','decision':'MODIFY'}).status_code==403
+    c.post('/auth/logout')
+    assert c.get('/patients').status_code==401
+
+def test_signed_session_tampering_and_expiry(monkeypatch):
+    from app.session_tokens import issue,verify
+    monkeypatch.setenv('SESSION_SECRET','synthetic-test-session-key-32-chars-minimum')
+    token=issue({'name':'demo-physician','role':'physician','expires':datetime.now(timezone.utc)+timedelta(hours=1)})
+    assert verify(token)['role']=='physician'
+    assert verify('bad'+token) is None
+    assert verify(token[:-1]+('1' if token[-1]!='1' else '2')) is None
+    expired=issue({'name':'demo-physician','role':'physician','expires':datetime.now(timezone.utc)-timedelta(seconds=1)})
+    assert verify(expired) is None
+
+def test_serverless_requires_strong_session_secret(monkeypatch):
+    monkeypatch.setenv('SERVERLESS_DEMO','true')
+    monkeypatch.setenv('SESSION_SECRET','short')
+    assert TestClient(app).post('/auth/login',json={'role':'physician','password':'test-password-only'}).status_code==503

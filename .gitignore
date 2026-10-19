@@ -9,3 +9,5 @@ frontend/.next/
 frontend/.browsers/
 frontend/test-results/
 frontend/playwright-report/
+frontend/out/
+.vercel/
