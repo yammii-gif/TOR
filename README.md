@@ -91,3 +91,9 @@ Cloud onboarding UI ของเซสชันนี้ไม่มี Preview/
 อ่านแถบแล็บในเครื่อง: `python desktop/lab_region.py` ดู [Desktop Agent](docs/desktop-agent.md) ไม่อัปโหลดภาพ ไม่จับหน้าต่างอัตโนมัติ และไม่ยืนยันตัวผู้ป่วยจากแถบแล็บเพียงอย่างเดียว
 
 นโยบายแหล่งอ้างอิงและโครงสร้างกฎปรับยา: [renal reference policy](docs/renal-reference-policy.md)
+
+## ประเมินอัตโนมัติและบัญชียาโรงพยาบาล
+
+หน้าแพทย์/ยาทางเลือกประเมินซ้ำอัตโนมัติเมื่อเปลี่ยนยา ข้อบ่งใช้ หรือข้อมูลไต ซ่อนผลเก่า แยกข้อค้นพบ Metformin จาก PDF ที่ผู้ใช้แนบ (หน้าเอกสาร37–38) ออกจากคำตัดสินที่ยังรอรับรอง ไม่มีการเปิดกฎจากเอกสารอัตโนมัติ ดู [automatic assessment](docs/automatic-medication-assessment.md)
+
+เพิ่มนำเข้า XLS และค้นบัญชียาแยกผลิตภัณฑ์โดย pharmacist/admin ที่ฐานความรู้ยา ไฟล์โรงพยาบาลตรวจพบ827รายการและนำเข้า local แล้ว แต่ช่องสถานะคลังว่าง จึงเป็น UNKNOWN ไม่ถือว่ามีของ/ใช้แทนได้ ไม่ commit ข้อมูลบัญชียาจริงหรือราคาเข้า source ดู [hospital formulary](docs/hospital-formulary.md) ก่อนนำเข้าบน hosting

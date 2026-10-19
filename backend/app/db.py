@@ -85,3 +85,22 @@ def seed():
             s.add(Patient(id='SYN-001',source=json.dumps({'id':'SYN-001','name':'ผู้ป่วยจำลอง 001','age':65,'weight_kg':60,'sex':'female','scr':1.5,'egfr':38,'diagnosis':'เบาหวานชนิดที่ 2','allergies':[], 'medications':['Metformin'],'collected_at':datetime.now(timezone.utc).isoformat(),'verified':True,'stable':True,'dialysis':False,'actual_weight_appropriate':True,'unit':'mg/dL'},ensure_ascii=False)))
         for name in DRUGS:
             if not s.query(Drug).filter_by(name=name).first(): s.add(Drug(name=name,stock_status='OUT_OF_STOCK' if name=='Sitagliptin' else 'IN_STOCK'))
+
+class FormularyItem(Base):
+    __tablename__='formulary_items'
+    code:Mapped[str]=mapped_column(String(100),primary_key=True)
+    display_name:Mapped[str]=mapped_column(Text)
+    generic_name:Mapped[str]=mapped_column(Text)
+    strength:Mapped[str]=mapped_column(Text)
+    unit:Mapped[str]=mapped_column(String(100))
+    brand:Mapped[str]=mapped_column(Text)
+    dosage_form:Mapped[str]=mapped_column(Text)
+    source_stock_flag:Mapped[str]=mapped_column(String(100),default='')
+    source_account_flag:Mapped[str]=mapped_column(String(100),default='')
+    source_status_flag:Mapped[str]=mapped_column(String(100),default='')
+    source_hash:Mapped[str]=mapped_column(String(64))
+    source_row:Mapped[int]
+    stock_status:Mapped[str]=mapped_column(String(30),default='UNKNOWN')
+    stock_checked_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True),nullable=True)
+    present_in_latest_import:Mapped[bool]=mapped_column(default=True)
+    imported_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))

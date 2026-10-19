@@ -40,3 +40,13 @@ Backend 29 tests ผ่าน รวม HMAC session ข้าม memory stores,
 - Local ROI tests ใช้ภาพเปล่า/reader fixture และตัวเลขสังเคราะห์เท่านั้น ไม่ใช่การวัดความแม่นยำจากภาพผู้ป่วยจริง ไม่มีการทดสอบ Windows live capture
 - URL UpToDate Public Search ที่ผู้ใช้ระบุถูก proxy ตอบ CONNECT403 ไม่มีบทความปัจจุบันถูกดึงสำเร็จ ไม่ถือว่าเป็นการตอบให้ล็อกอินจาก UpToDate เอง แหล่ง public เพิ่มใน configuration draft; draft ต้อง publish ก่อนจึงจะมีผลและยังไม่รับประกัน runtime egress
 - ยังไม่มี production identity, approved active drug rules, real HOSxP/LIS integration หรือการตรวจรับ deployment Vercel จากภายนอก
+
+## เอกสาร CKD และรายการยาโรงพยาบาล
+
+- Backend 96 tests ผ่าน รวมการแยก unapproved document finding จาก patient verdict, ขอบเขต eGFR 29.999/30/44.999/45/59.999/60, missing indication/renal context และการไม่ใช้ CrCl แทน eGFR
+- Browser 6 tests ผ่าน รวมผลประเมินอัตโนมัติเมื่อเปลี่ยนยา/แล็บ และการล้างผลเก่า โดยยังไม่เปิดคำตัดสินที่ไม่ได้รับรอง
+- XLS ต้นฉบับจากผู้ใช้ parse/import ผ่าน API local จริง 827 รายการ รหัสไม่ซ้ำ ช่องสถานะว่างจึง stock UNKNOWN ทุกตัว ไม่เก็บราคา metadata ผู้จัดทำหรือไฟล์ดิบในฐานข้อมูล/รีโป
+- Formulary tests ครอบคลุมแยกผลิตภัณฑ์ ไม่อนุมาน stock จากช่องว่าง นำเข้าซ้ำ ปฏิเสธรหัสซ้ำ/ไฟล์ผิด role/audit และ reset stock เมื่อ source hash เปลี่ยน
+- SQLite schemaเก่า002→005 รักษาข้อมูลเดิม; PostgreSQL16 migration005และ synthetic formulary import ผ่าน
+- Frontend lint/typecheck/normal build/Vercel export ผ่าน ยังไม่ได้ตรวจ deployment Vercel จริงจากภายนอก และไม่ได้ส่ง XLS โรงพยาบาลไป hosting โดยอัตโนมัติ
+- PDF เปิดอ่านข้อความหน้า53และดูรูปหน้า54โดยตรง เก็บเฉพาะ metadata/checksum และ excerpt สั้น ไม่มี approved active rules เพิ่มและไม่มี actionable alternative dosing

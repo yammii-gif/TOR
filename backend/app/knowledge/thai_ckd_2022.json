@@ -1,0 +1,35 @@
+{
+  "id": "user-upload-thai-ckd-2022-revised",
+  "title": "ข้อแนะนำเวชปฏิบัติการดูแลผู้ป่วยโรคไตเรื้อรังก่อนการบำบัดทดแทนไต พ.ศ. 2565 (ฉบับปรับปรุงเพิ่มเติม)",
+  "publisher": "สมาคมโรคไตแห่งประเทศไทย",
+  "filename": "CKD-guideline_-draft_5-เพิ่มเติม-2565-.pdf",
+  "sha256": "eb8c164d43577dca0760f2be4994055b9d3e2e7d183098731539501898ed51c4",
+  "pages": 106,
+  "reviewed_by_clinician": null,
+  "inspected_at": "2026-10-19",
+  "status": "PENDING_CLINICAL_VALIDATION",
+  "version_note": "หน้าปกระบุปี 2565 ฉบับปรับปรุงเพิ่มเติม; ชื่อไฟล์มี draft ต้องยืนยันฉบับและความเป็นปัจจุบันก่อนใช้จริง",
+  "provenance": "เอกสาร PDF ที่ผู้ใช้แนบ ไม่ใช่บทความที่ดึงจาก UpToDate และไม่ได้รับรองโดยโรงพยาบาล",
+  "findings": [
+    {
+      "drug": "Metformin",
+      "indication": "type 2 diabetes",
+      "renal_measure": "eGFR",
+      "unit": "mL/min/1.73m²",
+      "pdf_pages": [53, 54],
+      "printed_pages": [37, 38],
+      "section": "7.4.1; รูปที่ 7.7",
+      "exact_excerpt": "ปรับลดขนาดยา metformin เมื่อค่าอัตราการกรองของไตน้อยกว่า 45 มล./นาที/1.73 ตร.ม.",
+      "evidence_grade_as_printed": "ข้อแนะนำ 7.4.1.1: (1, B); ข้อควรปฏิบัติ 7.4.1.3: Not Graded",
+      "bands": [
+        {"lower_inclusive": 0, "upper_exclusive": 30, "source_statement": "รูปที่ 7.7 ระบุ: ไม่เริ่มยาหรือหยุดยา metformin", "source_category": "AVOID"},
+        {"lower_inclusive": 30, "upper_exclusive": 45, "source_statement": "ข้อควรปฏิบัติ 7.4.1.3 และรูปที่ 7.7 กล่าวถึงการปรับลดขนาดยา", "source_category": "ADJUST"},
+        {"lower_inclusive": 45, "upper_exclusive": 60, "source_statement": "พิจารณาลดขนาดยาในรายที่เสี่ยงต่อ hypoperfusion หรือ hypoxemia; ต้องทราบภาวะเสี่ยงเพิ่มเติม", "source_category": "CONDITIONAL"},
+        {"lower_inclusive": 60, "upper_exclusive": null, "source_statement": "รูปที่ 7.7 ระบุใช้ยาขนาดเดิมในแง่เกณฑ์ไต ไม่ใช่การรับรองว่าปลอดภัยในทุกบริบท", "source_category": "RENAL_ONLY"}
+      ],
+      "dose": null,
+      "alternatives": [],
+      "limitation": "เป็นข้อค้นพบจากเอกสารเท่านั้น ยังไม่ใช่กฎใช้งาน ไม่มีการเทียบฉลากยา การเริ่ม/ใช้ยาต่อ รูปแบบยา ภาวะเสี่ยง ปฏิกิริยาระหว่างยา หรือการรับรองทางคลินิกครบถ้วน"
+    }
+  ]
+}

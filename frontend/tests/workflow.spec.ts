@@ -110,3 +110,25 @@ test('knowledge base shows licensed source restriction without claiming retrieva
  await expect(page.getByRole('heading',{name:'UpToDate — Full Clinical Topics · LICENSE_REQUIRED'}).first()).toBeVisible();
  await expect(page.getByText('ยังไม่มีการเชื่อมต่อที่ได้รับอนุญาตของสถาบัน ไม่มีการดึงเนื้อหาหรือข้ามการเข้าสู่ระบบ')).toBeVisible();
 });
+
+test('assessment appears automatically and document findings never imply approval',async({page})=>{
+ await page.goto('/');
+ await page.locator('input[type=password]').fill(process.env.DEMO_PASSWORD||'renal-demo-local');
+ await page.getByRole('button',{name:'เข้าสู่ระบบ',exact:true}).click();
+ await expect(page.getByText('ผู้ใช้งาน: physician')).toBeVisible();
+ await page.getByRole('button',{name:/พื้นที่ทำงานแพทย์/}).click();
+ const assessment=page.getByTestId('medication-assessment');
+ await expect(assessment.getByTestId('medication-verdict')).toContainText('ยังสรุปไม่ได้ — ต้องทบทวน');
+ await expect(assessment.getByTestId('document-finding')).toContainText('หน้า PDF 53–54');
+ await expect(assessment.getByTestId('document-finding')).toContainText('กล่าวถึงการปรับลดขนาดยา');
+ await page.getByLabel('eGFR จากแล็บ',{exact:false}).fill('29.99');
+ await expect(assessment.getByTestId('medication-verdict')).toContainText('กำลังประเมิน');
+ await expect(assessment.getByTestId('document-finding')).toContainText('ไม่เริ่มยาหรือหยุดยา metformin');
+ await expect(assessment.getByTestId('medication-verdict')).toContainText('ยังสรุปไม่ได้ — ต้องทบทวน');
+ await page.getByLabel('ชื่อยา',{exact:true}).fill('Gabapentin');
+ await expect(assessment.getByTestId('document-finding')).toHaveCount(0);
+ await expect(assessment.getByTestId('medication-verdict')).toContainText('ยังสรุปไม่ได้ — ต้องทบทวน');
+ await expect(assessment).toContainText('NO_VALIDATED_ALTERNATIVE');
+ await page.getByLabel('ข้อบ่งใช้สำหรับประเมินยา').fill('');
+ await expect(assessment.getByTestId('medication-verdict')).toContainText('ระบุชื่อยาและข้อบ่งใช้ก่อนประเมิน');
+});

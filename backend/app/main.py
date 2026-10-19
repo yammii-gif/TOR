@@ -9,6 +9,7 @@ from .db import Session, Drug, Rule, Prescription, Audit, Patient
 from .clinical import RenalInput, calculate, evaluate
 from . import session_tokens
 from .rule_specification import renal_rule_template
+from .medication_assessment import assess_medication, document_metadata
 from .stock_workflow import make_stock_router, prescription_view, PENDING_STOCK
 app=FastAPI(title='Renal Smart CDSS — SYNTHETIC DATA')
 app.add_middleware(CORSMiddleware,allow_origins=[os.getenv('FRONTEND_ORIGIN','http://localhost:3000')],allow_credentials=True,allow_methods=['GET','POST'],allow_headers=['Content-Type'])
@@ -60,7 +61,9 @@ class Assessment(BaseModel):
     drug:str
     indication:str|None=None
 @app.post('/assess')
-def assess(p:Assessment,u=Depends(user)): return evaluate(p.patient,indication=p.indication)
+def assess(p:Assessment,u=Depends(user)): return assess_medication(p.patient,p.drug,p.indication)
+@app.get('/knowledge/documents')
+def knowledge_documents(u=Depends(user)): return [document_metadata()]
 @app.get('/drugs')
 def drugs(u=Depends(user)):
     with Session() as s: return [{'id':d.id,'name':d.name,'status':d.status,'stock_status':d.stock_status,'evidence':json.loads(d.evidence)} for d in s.query(Drug).all()]
@@ -174,3 +177,5 @@ def retrieve(id:int,u=Depends(roles('pharmacist','admin'))):
 app.include_router(make_stock_router(roles,audit))
 from .evidence_sources import make_evidence_router
 app.include_router(make_evidence_router(roles,audit,user))
+from .formulary import make_formulary_router
+app.include_router(make_formulary_router(roles,audit))
