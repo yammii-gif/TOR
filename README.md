@@ -4,6 +4,8 @@
 
 ## เปิดออนไลน์
 
+หากไม่ต้องการเพิ่มบัตรใน Render ให้ใช้ [Hugging Face Spaces แบบ CPU basic ฟรี](docs/huggingface-free.md) โดยอัปโหลด Dockerfile ไฟล์เดียวจาก repository นี้ ไม่ต้องสร้างเว็บใหม่
+
 [Deploy บน Render](https://render.com/deploy?repo=https://github.com/yammii-gif/TOR) เพื่อสร้างเว็บ HTTPS จาก repository นี้โดยไม่ต้องดาวน์โหลด ZIP ใช้บัญชี Render ของคุณ และอ่าน [ขั้นตอนเปิดเดโมออนไลน์](docs/online-demo.md) สำหรับรหัสผ่านและข้อจำกัดของข้อมูลชั่วคราว ลิงก์นี้เป็นหน้าสร้างบริการ ยังไม่ใช่ URL ของเว็บที่ deploy แล้ว
 
 ## เริ่มใช้งาน
