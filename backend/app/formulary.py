@@ -1,12 +1,14 @@
 """Explicit XLS import: no macros/formula execution, prices or personal metadata retained."""
 import hashlib
+import json
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Literal
 import xlrd
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import or_
-from .db import Session, FormularyItem
+from .db import Session, FormularyItem, Drug
 
 MAX_BYTES=8*1024*1024
 COLUMNS={'รหัส':'code','ชื่อยา':'display_name','ชื่อสามัญ':'generic_name','ความแรง':'strength',
@@ -70,8 +72,34 @@ def import_items(session,items):
             item.stock_status='UNKNOWN';item.stock_checked_at=None
         for key,value in data.items():setattr(item,key,value)
         item.present_in_latest_import=True;item.imported_at=now
+    session.flush()
+    sync_product_drugs(session)
     return {'imported':len(items),'source_hash':items[0]['source_hash'],
             'note':'รายการในไฟล์ไม่ยืนยันสถานะใช้ในบัญชีหรือยอดคงเหลือ และไม่ใช่กฎขนาดยา'}
+
+
+def sync_product_drugs(session):
+    products={drug.formulary_code:drug for drug in session.query(Drug).filter(Drug.formulary_code.isnot(None))}
+    unlinked={drug.name:drug for drug in session.query(Drug).filter(Drug.formulary_code.is_(None))}
+    for item in session.query(FormularyItem).filter_by(present_in_latest_import=True):
+        name=f'{item.display_name} [{item.code}]'
+        drug=products.get(item.code) or unlinked.get(name)
+        if drug is None:
+            drug=Drug(formulary_code=item.code,stock_status='UNKNOWN');session.add(drug)
+        drug.formulary_code=item.code
+        drug.name=name
+
+
+def ensure_default_catalog(session):
+    if session.query(FormularyItem).count()==0:
+        catalog=json.loads((Path(__file__).parent/'knowledge'/'hospital_formulary.json').read_text())
+        import_items(session,catalog['items'])
+    else:
+        sync_product_drugs(session)
+
+
+def product_snapshot(item):
+    return {key:getattr(item,key) for key in ('code','display_name','generic_name','strength','unit','dosage_form','source_hash','stock_status')}
 
 
 def item_view(item):

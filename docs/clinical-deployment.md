@@ -4,7 +4,7 @@
 
 ## Workflow ที่ทำงานแล้ว
 
-- แพทย์กรอกข้อเสนอยาและยืนยันเองได้ทันที ถ้ายามีในคลังจำลอง สถานะ `PHYSICIAN_FINALIZED` ไม่ต้องผ่านการอนุมัติซ้ำโดยเภสัชกร
+- แพทย์กรอกข้อเสนอยาและยืนยันเองได้ทันที ถ้ายังไม่ถูกระบุว่ายาหมด สถานะ `PHYSICIAN_FINALIZED` ไม่ต้องผ่านการอนุมัติซ้ำโดยเภสัชกร
 - หากยาขาดคลัง สถานะ `WAITING_STOCK_ALTERNATIVE`; เภสัชกรเสนอจากรายการ `IN_STOCK` พร้อมข้อบ่งใช้/เหตุผล แพทย์ตรวจและเลือกหรือปฏิเสธ การเลือกต้องกรอกวิธีใช้เองและบันทึกเหตุผล
 - การมีในคลังไม่ได้ยืนยันความเทียบเท่าทางการรักษา ระบบไม่สร้างขนาดยาหรืออ้างว่าสองยาใช้แทนกันได้
 - การยืนยันนี้เป็นบันทึกภายในโปรแกรม ไม่ใช่การส่งใบสั่งยาเข้า HOSxP การประเมินที่ข้อมูลไม่พร้อมต้องให้แพทย์แก้ข้อมูลหรือบันทึก manual override
@@ -20,7 +20,7 @@
 | คำนวณ | CG และ CKD-EPI2021 พร้อม automated tests | institution-reviewed specs; AKI/dialysis/body size/weight context; independent reference comparison |
 | กฎยา | ไม่มี approved active dose rules | เภสัชกร/แพทย์ทบทวนหลักฐานและ version, indication, measure, thresholds, contraindications, interactions และ monitoring |
 | ความปลอดภัย | session cookie + role checks + ORM audit | threat model, penetration testing, DB access policy, tamper-resistant audit, PDPA/data governance |
-| คลังกายภาพ | manual synthetic IN/OUT stock | authorized formulary/stock integration, freshness, race/conflict policy |
+| คลังกายภาพ | บัญชีจากไฟล์827ผลิตภัณฑ์พร้อม UNKNOWN / ผลตรวจ manual | authorized formulary/stock integration, freshness, race/conflict policy |
 
 อย่าส่ง HN หรือภาพผู้ป่วยจริงเข้าบริการ Vercel เดโมนี้ระหว่างรอรายการข้างต้น การติดตั้งจริงควรอยู่ในเครือข่าย/hosting ที่หน่วยงานอนุมัติ พร้อม HTTPS และฐานข้อมูลถาวร สิทธิ์ read-only HOSxP/LIS ต้องแยกจากสิทธิ์เขียนใบสั่งยา
 

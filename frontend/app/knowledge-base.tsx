@@ -31,5 +31,5 @@ export default function KnowledgeBase({sources,records,drugs,canRetrieve,canRevi
       </>}
       <p>สถานะทางคลินิก: PENDING_CLINICAL_VALIDATION</p>
     </article>)}
-  </section><section><h2>ทะเบียนยาเริ่มต้น 10 รายการ</h2>{drugs.map(d=><p key={String(d.id)}>{String(d.name)} — {String(d.status)} • คลังจำลอง: {String(d.stock_status)}{canReview&&<button onClick={()=>safe(async()=>{await request(`/rules/${d.id}/draft`,{});})}>สร้างกฎฉบับร่าง</button>}</p>)}</section></>;
+  </section><section><h2>ทะเบียนความรู้ยาเริ่มต้น 10 รายการ (แยกจากบัญชียาโรงพยาบาล)</h2>{drugs.map(d=><p key={String(d.id)}>{String(d.name)} — {String(d.status)}{canReview&&<button onClick={()=>safe(async()=>{await request(`/rules/${d.id}/draft`,{});})}>สร้างกฎฉบับร่าง</button>}</p>)}</section></>;
 }

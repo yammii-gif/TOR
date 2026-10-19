@@ -2,7 +2,7 @@
 import {useEffect,useState} from 'react';
 type Row=Record<string,unknown>;
 type Finding={drug:string;section:string;pdf_pages:number[];printed_pages:number[];exact_excerpt:string;limitation:string;comparison_value:number|null;comparison_basis:string;matched_band:{source_statement:string}|null;source:{title:string;version_note:string;sha256:string}};
-type Assessment={decision:{code:string;label:string;reason:string};alternatives_reason:string;document_findings:Finding[]};
+type Assessment={decision:{code:string;label:string;reason:string;actionable:boolean};alternatives_reason:string;document_findings:Finding[]};
 
 export default function MedicationAssessment({patient,drug,indication}:{patient:Row;drug:string;indication:string}){
   const input=JSON.stringify({patient,drug,indication});
@@ -21,10 +21,12 @@ export default function MedicationAssessment({patient,drug,indication}:{patient:
   },[input]);
   const current=state.input===input;
   const assessment=current?state.data:undefined;
+  const styles:Record<string,{className:string;label:string}>={CONTINUE:{className:'decision-green',label:'ใช้ยาเดิมต่อได้'},ADJUST_DOSE:{className:'decision-yellow',label:'ปรับขนาดยา'},CHANGE_DRUG:{className:'decision-red',label:'เปลี่ยนยา'},REVIEW_REQUIRED:{className:'decision-gray',label:'ยังสรุปไม่ได้ — ต้องทบทวน'}};
+  const verdict=assessment?.decision.actionable?styles[assessment.decision.code]||styles.REVIEW_REQUIRED:styles.REVIEW_REQUIRED;
   return <div className="medication-assessment" data-testid="medication-assessment" aria-live="polite">
     <h3>สรุปความเหมาะสมของยา: {drug||'ยังไม่ระบุยา'}</h3>
-    <div className="decision-legend" aria-label="ประเภทผลประเมิน"><span>ใช้ได้ตามเกณฑ์ที่รับรอง</span><span>ต้องปรับขนาดยา</span><span>ห้ามใช้ / ควรเปลี่ยนยา</span><span>ยังสรุปไม่ได้</span></div>
-    <div className="decision-review" data-testid="medication-verdict"><strong>{assessment?.decision.label||'ยังสรุปไม่ได้ — ต้องตรวจข้อมูล'}</strong><p>{!current?'กำลังประเมินข้อมูลชุดล่าสุด…':state.error||assessment?.decision.reason||'กำลังประเมิน…'}</p></div>
+    <p className="muted">ความหมายของสี</p><div className="decision-legend" aria-label="ประเภทผลประเมิน"><span className="decision-green">✓ ใช้ยาเดิมต่อได้</span><span className="decision-yellow">! ปรับขนาดยา</span><span className="decision-red">✕ เปลี่ยนยา</span><span className="decision-gray">? ยังสรุปไม่ได้</span></div>
+    <div className={`decision-banner ${verdict.className}`} data-testid="medication-verdict"><strong>{verdict.label}</strong><p>{!current?'กำลังประเมินข้อมูลชุดล่าสุด…':state.error||assessment?.decision.reason||'กำลังประเมิน…'}</p></div>
     <p>ประเมินอัตโนมัติเมื่อเปลี่ยนยา ข้อบ่งใช้ หรือข้อมูลไต ผลเก่าจะถูกซ่อนทันที</p>
     <h3>ยาทางเลือก</h3><p>{assessment?.alternatives_reason||'ยังไม่มีทางเลือกที่ยืนยันสำหรับข้อมูลชุดนี้'}</p>
     <p className="warning">NO_VALIDATED_ALTERNATIVE — CLINICAL REVIEW REQUIRED</p>

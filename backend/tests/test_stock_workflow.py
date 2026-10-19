@@ -1,18 +1,24 @@
-from test_safety import db, client, patient
+from test_safety import db, client, patient, METFORMIN_PRODUCT
 from app.db import Session, Prescription
 
+def product(c,code):return next(item for item in c.get('/inventory').json() if item['code']==code)
+
 def request_stock(doctor):
-    response=doctor.post('/prescriptions',json={'drug':'Sitagliptin','proposal':'ข้อเสนอแพทย์ในข้อมูลจำลอง','decision':'MODIFY'})
+    pharmacist=client('pharmacist')
+    pharmacist.post(f"/inventory/{product(pharmacist,'1000110')['id']}",json={'status':'OUT_OF_STOCK'})
+    pharmacist.post(f"/inventory/{product(pharmacist,'1000997')['id']}",json={'status':'IN_STOCK'})
+    response=doctor.post('/prescriptions',json={'drug':product(doctor,'1000110')['name'],'proposal':'ข้อเสนอแพทย์ในข้อมูลจำลอง','decision':'MODIFY'})
     assert response.status_code==200,response.text
     assert response.json()['status']=='WAITING_STOCK_ALTERNATIVE'
     return response.json()['id']
 
-def offer(pharmacist,record,drug_id=1):
+def offer(pharmacist,record,drug_id=None):
+    if drug_id is None:drug_id=product(pharmacist,'1000997')['id']
     response=pharmacist.post(f'/prescriptions/{record}/stock-alternatives',json={'drug_id':drug_id,'indication':'เบาหวานชนิดที่ 2','rationale':'ข้อเสนอเภสัชกรในกรณีจำลอง ให้แพทย์ทบทวนความเหมาะสมทางคลินิก'})
     return response
 
 def test_physician_finalizes_without_pharmacist_gate():
-    doctor=client('physician');r=doctor.post('/prescriptions',json={'drug':'Metformin','proposal':'manual synthetic proposal','decision':'MODIFY'})
+    doctor=client('physician');r=doctor.post('/prescriptions',json={'drug':METFORMIN_PRODUCT,'proposal':'manual synthetic proposal','decision':'MODIFY'})
     assert r.json()['status']=='PHYSICIAN_FINALIZED'
     records=doctor.get('/prescriptions').json()
     assert records[0]['finalized_at'] is not None
@@ -51,24 +57,40 @@ def test_physician_can_decline_without_finalizing():
 
 def test_stock_checked_at_proposal_and_physician_confirmation():
     doctor=client('physician');pharmacist=client('pharmacist');record=request_stock(doctor)
-    assert offer(pharmacist,record,drug_id=2).status_code==409
+    assert offer(pharmacist,record,drug_id=product(pharmacist,'1000110')['id']).status_code==409
     a=offer(pharmacist,record).json()
-    assert pharmacist.post('/inventory/1',json={'status':'OUT_OF_STOCK'}).status_code==200
+    assert pharmacist.post(f"/inventory/{product(pharmacist,'1000997')['id']}",json={'status':'OUT_OF_STOCK'}).status_code==200
     assert doctor.post(f"/prescriptions/{record}/stock-alternatives/{a['id']}/decision",json={'action':'ACCEPT','reason':'manual review','proposal':'manual plan'}).status_code==409
     assert len(doctor.get('/prescriptions').json())==1
 
 def test_roles_and_stock_request_scope():
     doctor=client('physician');pharmacist=client('pharmacist')
-    assert doctor.post('/inventory/1',json={'status':'OUT_OF_STOCK'}).status_code==403
+    assert doctor.post(f"/inventory/{product(pharmacist,'1000997')['id']}",json={'status':'OUT_OF_STOCK'}).status_code==403
     record=request_stock(doctor)
     assert doctor.post(f'/prescriptions/{record}/stock-alternatives',json={'drug_id':1,'indication':'diabetes','rationale':'manual proposal'}).status_code==403
-    ready=doctor.post('/prescriptions',json={'drug':'Metformin','proposal':'manual synthetic','decision':'MODIFY'}).json()['id']
+    ready=doctor.post('/prescriptions',json={'drug':METFORMIN_PRODUCT,'proposal':'manual synthetic','decision':'MODIFY'}).json()['id']
     assert offer(pharmacist,ready).status_code==409
     assert doctor.post('/prescriptions',json={'drug':'unknown','proposal':'manual','decision':'MODIFY'}).status_code==422
 
 def test_unsafe_renal_context_requires_physician_override():
     doctor=client('physician');data=patient(stable=False).model_dump(mode='json')
-    payload={'drug':'Metformin','proposal':'manual synthetic','decision':'MODIFY','patient_input':data}
+    payload={'drug':METFORMIN_PRODUCT,'proposal':'manual synthetic','decision':'MODIFY','patient_input':data}
     assert doctor.post('/prescriptions',json=payload).status_code==409
     payload.update(decision='OVERRIDE',reason='แพทย์ทบทวนข้อจำกัดในกรณีจำลอง')
     assert doctor.post('/prescriptions',json=payload).json()['status']=='PHYSICIAN_FINALIZED'
+
+def test_unknown_stock_is_not_an_available_therapeutic_alternative():
+    doctor=client('physician');pharmacist=client('pharmacist');record=request_stock(doctor)
+    unknown=product(pharmacist,'1000716')
+    assert unknown['stock_status']=='UNKNOWN'
+    assert offer(pharmacist,record,unknown['id']).status_code==409
+
+
+def test_catalog_change_after_offer_requires_new_pharmacist_proposal():
+    from app.db import FormularyItem
+    doctor=client('physician');pharmacist=client('pharmacist');record=request_stock(doctor)
+    a=offer(pharmacist,record).json()
+    with Session.begin() as s:s.get(FormularyItem,'1000997').source_hash='b'*64
+    endpoint=f"/prescriptions/{record}/stock-alternatives/{a['id']}/decision"
+    assert doctor.post(endpoint,json={'action':'ACCEPT','reason':'synthetic review','proposal':'manual fixture'}).status_code==409
+    assert doctor.get('/prescriptions').json()[0]['status']=='ALTERNATIVE_PROPOSED'

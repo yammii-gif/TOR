@@ -69,8 +69,14 @@ test('renal values recalculate from inputs and stale results are cleared',async(
 
 test('out-of-stock request goes to pharmacist and physician makes the final choice',async({page,request})=>{
  const password=process.env.DEMO_PASSWORD||'renal-demo-local';
+ await request.post('/api/auth/login',{data:{role:'pharmacist',password}});
+ const inventory=await (await request.get('/api/inventory')).json();
+ const original=inventory.find((item:{code:string})=>item.code==='1000110');
+ const replacement=inventory.find((item:{code:string})=>item.code==='1000997');
+ await request.post(`/api/inventory/${original.id}`,{data:{status:'OUT_OF_STOCK'}});
+ await request.post(`/api/inventory/${replacement.id}`,{data:{status:'IN_STOCK'}});
  await request.post('/api/auth/login',{data:{role:'physician',password}});
- const created=await request.post('/api/prescriptions',{data:{drug:'Sitagliptin',proposal:'ข้อเสนอเดิมในข้อมูลสังเคราะห์',decision:'MODIFY'}});
+ const created=await request.post('/api/prescriptions',{data:{drug:original.name,proposal:'ข้อเสนอเดิมในข้อมูลสังเคราะห์',decision:'MODIFY'}});
  expect(created.status()).toBe(200);
  const record=await created.json();expect(record.status).toBe('WAITING_STOCK_ALTERNATIVE');
  await page.goto('/');
@@ -80,7 +86,7 @@ test('out-of-stock request goes to pharmacist and physician makes the final choi
  await expect(page.getByText('ผู้ใช้งาน: pharmacist')).toBeVisible();
  await page.getByRole('button',{name:/เภสัชกร: ยาขาดคลัง/}).click();
  const queue=page.getByTestId(`stock-request-${record.id}`);
- await queue.getByLabel('ยาที่มีในคลังจำลอง',{exact:true}).selectOption('1');
+ await queue.getByLabel('ยาที่มีในคลัง',{exact:true}).selectOption(String(replacement.id));
  await queue.getByLabel('เหตุผลและข้อควรพิจารณาของเภสัชกร').fill('ข้อเสนอจำลองสำหรับแพทย์พิจารณาข้อบ่งใช้และ renal context');
  await queue.getByRole('button',{name:'เสนอทางเลือกให้แพทย์'}).click();
  await expect(queue).toContainText('PROPOSED');
@@ -117,7 +123,13 @@ test('assessment appears automatically and document findings never imply approva
  await page.getByRole('button',{name:'เข้าสู่ระบบ',exact:true}).click();
  await expect(page.getByText('ผู้ใช้งาน: physician')).toBeVisible();
  await page.getByRole('button',{name:/พื้นที่ทำงานแพทย์/}).click();
+ await expect(page.getByText('รุ่น 2.1 · บัญชียาโรงพยาบาล')).toBeVisible();
+ await expect(page.getByText('เลือกผลิตภัณฑ์จากบัญชีโรงพยาบาล 827 รายการ')).toBeVisible();
  const assessment=page.getByTestId('medication-assessment');
+ await expect(assessment.locator('.decision-legend .decision-green')).toContainText('ใช้ยาเดิมต่อได้');
+ await expect(assessment.locator('.decision-legend .decision-yellow')).toHaveCSS('background-color','rgb(254, 240, 138)');
+ await expect(assessment.locator('.decision-legend .decision-red')).toContainText('เปลี่ยนยา');
+ await expect(assessment.getByTestId('medication-verdict')).toHaveClass(/decision-gray/);
  await expect(assessment.getByTestId('medication-verdict')).toContainText('ยังสรุปไม่ได้ — ต้องทบทวน');
  await expect(assessment.getByTestId('document-finding')).toContainText('หน้า PDF 53–54');
  await expect(assessment.getByTestId('document-finding')).toContainText('กล่าวถึงการปรับลดขนาดยา');

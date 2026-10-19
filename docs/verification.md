@@ -50,3 +50,14 @@ Backend 29 tests ผ่าน รวม HMAC session ข้าม memory stores,
 - SQLite schemaเก่า002→005 รักษาข้อมูลเดิม; PostgreSQL16 migration005และ synthetic formulary import ผ่าน
 - Frontend lint/typecheck/normal build/Vercel export ผ่าน ยังไม่ได้ตรวจ deployment Vercel จริงจากภายนอก และไม่ได้ส่ง XLS โรงพยาบาลไป hosting โดยอัตโนมัติ
 - PDF เปิดอ่านข้อความหน้า53และดูรูปหน้า54โดยตรง เก็บเฉพาะ metadata/checksum และ excerpt สั้น ไม่มี approved active rules เพิ่มและไม่มี actionable alternative dosing
+
+## รุ่น2.1 — บัญชียาโรงพยาบาลเป็นแหล่งหลัก
+
+- ตามคำขอให้ใช้ไฟล์จริงโดยตรง เพิ่ม snapshot827ผลิตภัณฑ์เฉพาะข้อมูลระบุตัวยา ไม่มี XLS ราคา หรือ metadata ผู้จัดทำ โหลดอัตโนมัติในฐานข้อมูลว่างและไม่ทับบัญชีที่นำเข้าใหม่
+- Inventory/ใบสั่งใหม่/ข้อเสนอยาหมดใช้รหัสผลิตภัณฑ์จาก FormularyItem ผ่าน Drug.formulary_code แทน synthetic inventory10ตัว ทะเบียนอ้างอิง10ตัวยังอยู่แยกเพื่อพัฒนาความรู้ยา
+- ช่องคลังว่างเป็นUNKNOWN แพทย์บันทึก manual decision ได้พร้อมsnapshot เฉพาะOUT_OF_STOCKไปคิวเภสัชกร ทางเลือกต้องเป็นIN_STOCKที่ผู้ตรวจระบุ; UNKNOWNไม่ถูกเสนอเป็นของพร้อมจ่าย และตรวจ source hash ซ้ำก่อนเลือก
+- Backend100tests ผ่าน รวมdefault827รายการ ไม่ใช้ชื่อสามัญเปล่าแทนผลิตภัณฑ์ ปฏิเสธทางเลือกUNKNOWN และตรวจบัญชีเปลี่ยนหลังเสนอ
+- Browser6tests ผ่าน รวมบัญชี827อัตโนมัติ สีเขียว/เหลือง/แดง และรักษาคำตัดสินรอรับรองเป็นเทา
+- SQLite005→006บนสำเนาฐานข้อมูลเดิมรักษาประวัติใบสั่งและเชื่อม827ผลิตภัณฑ์ PostgreSQL16 upgrade006/seedซ้ำ/ขั้นdowngrade005แล้วupgrade006ผ่าน
+- UIมีป้ายรุ่น2.1 คำอธิบายสีและสถานะคลังยาที่เลือก ถ้ายังเห็นรุ่นเก่าต้องตรวจsource commitของdeployment ไม่ถือว่าpush GitHubแล้วเป็นหลักฐานว่าVerceldeployสำเร็จ
+- ไม่มี clinical dose rule ที่ได้รับอนุมัติเพิ่มขึ้น และข้อมูล manual stock/prescription ยังต้องฐานข้อมูลถาวรใน deploymentจริง

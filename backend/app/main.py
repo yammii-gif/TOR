@@ -9,8 +9,9 @@ from .db import Session, Drug, Rule, Prescription, Audit, Patient
 from .clinical import RenalInput, calculate, evaluate
 from . import session_tokens
 from .rule_specification import renal_rule_template
+from .formulary import product_snapshot
 from .medication_assessment import assess_medication, document_metadata
-from .stock_workflow import make_stock_router, prescription_view, PENDING_STOCK
+from .stock_workflow import make_stock_router, prescription_view, PENDING_STOCK, product_for
 app=FastAPI(title='Renal Smart CDSS — SYNTHETIC DATA')
 app.add_middleware(CORSMiddleware,allow_origins=[os.getenv('FRONTEND_ORIGIN','http://localhost:3000')],allow_credentials=True,allow_methods=['GET','POST'],allow_headers=['Content-Type'])
 sessions={}
@@ -61,14 +62,21 @@ class Assessment(BaseModel):
     drug:str
     indication:str|None=None
 @app.post('/assess')
-def assess(p:Assessment,u=Depends(user)): return assess_medication(p.patient,p.drug,p.indication)
+def assess(p:Assessment,u=Depends(user)):
+    with Session() as s:
+        drug=s.query(Drug).filter_by(name=p.drug).first()
+        name=p.drug
+        if drug and drug.formulary_code:
+            item=product_for(s,drug)
+            name='Metformin' if item.generic_name.upper() in ('METFORMIN','METFORMIN HYDROCHLORIDE') else item.generic_name
+        return assess_medication(p.patient,name,p.indication)
 @app.get('/knowledge/documents')
 def knowledge_documents(u=Depends(user)): return [document_metadata()]
 @app.get('/drugs')
 def drugs(u=Depends(user)):
-    with Session() as s: return [{'id':d.id,'name':d.name,'status':d.status,'stock_status':d.stock_status,'evidence':json.loads(d.evidence)} for d in s.query(Drug).all()]
+    with Session() as s: return [{'id':d.id,'name':d.name,'status':d.status,'evidence':json.loads(d.evidence)} for d in s.query(Drug).filter(Drug.formulary_code.is_(None)).all()]
 class Decision(BaseModel):
-    drug:str=Field(min_length=1,max_length=100)
+    drug:str=Field(min_length=1,max_length=500)
     proposal:str=Field(min_length=1,max_length=1000)
     decision:str
     reason:str=Field(default='',max_length=2000)
@@ -86,10 +94,12 @@ def prescribe(p:Decision,u=Depends(roles('physician'))):
         if p.patient_input: snapshot.update(p.patient_input.model_dump(mode='json'))
         snapshot['calculation']=calculate(RenalInput(**snapshot))
         drug=s.query(Drug).filter(func.lower(Drug.name)==p.drug.strip().lower()).first()
-        if not drug: raise HTTPException(422,'เลือกยาจากรายการคลังจำลองเพื่อยืนยันสถานะสต็อก')
+        if not drug: raise HTTPException(422,'เลือกผลิตภัณฑ์จากบัญชียาโรงพยาบาล')
+        item=product_for(s,drug)
+        snapshot['formulary_product']=product_snapshot(item)
         if snapshot['calculation']['status']!='SIMULATION' and p.decision!='OVERRIDE':
             raise HTTPException(409,'ตรวจสอบข้อมูลไตก่อนยืนยัน หรือบันทึก Override พร้อมเหตุผล')
-        status='PHYSICIAN_FINALIZED' if drug.stock_status=='IN_STOCK' else 'WAITING_STOCK_ALTERNATIVE'
+        status='WAITING_STOCK_ALTERNATIVE' if item.stock_status=='OUT_OF_STOCK' else 'PHYSICIAN_FINALIZED'
         values=p.model_dump(exclude={'patient_input'});values['drug']=drug.name
         record=Prescription(**values,source_snapshot=json.dumps(snapshot),status=status,finalized_at=datetime.now(timezone.utc) if status=='PHYSICIAN_FINALIZED' else None); s.add(record); s.flush()
         audit(s,u,'PHYSICIAN_'+('FINALIZED' if status=='PHYSICIAN_FINALIZED' else 'STOCK_REQUEST'),'DRAFT',status,p.reason,record.id)

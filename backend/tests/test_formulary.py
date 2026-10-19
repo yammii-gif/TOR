@@ -34,7 +34,7 @@ def test_reimport_idempotent_and_new_export_invalidates_past_stock_check():
     with Session.begin() as s:import_items(s,changed[:1])
     result=c.get('/formulary').json()
     assert result['total']==1 and result['items'][0]['stock_status']=='UNKNOWN'
-    with Session() as s:assert s.query(FormularyItem).count()==2
+    with Session() as s:assert s.query(FormularyItem).filter(FormularyItem.code.in_(['SYN-DRUG-1','SYN-DRUG-2'])).count()==2
 
 
 def test_import_and_stock_roles_audit_and_atomic_rejection(monkeypatch):
@@ -58,3 +58,24 @@ def test_bad_rows_and_non_xls_rejected():
     with pytest.raises(ValueError):parse_rows(HEADERS,ROWS+[ROWS[0]],'a'*64)
     with pytest.raises(ValueError):parse_rows(HEADERS,[['','','','','','','','']],'a'*64)
     with pytest.raises(ValueError):parse_xls(b'<html>Not an XLS</html>')
+
+
+def test_default_hospital_catalog_is_primary_and_not_synthetic_inventory():
+    c=client('physician');inventory=c.get('/inventory').json()
+    assert len(inventory)==827
+    assert all(item['label']=='HOSPITAL FORMULARY' and item['stock_status']=='UNKNOWN' for item in inventory)
+    assert len({item['code'] for item in inventory})==827
+    assert not any(item['name']=='Sitagliptin' for item in inventory)
+    assert any(item['code']=='1000997' and item['strength']=='500 MG' for item in inventory)
+    assert c.post('/prescriptions',json={'drug':'Metformin','proposal':'manual fixture','decision':'MODIFY'}).status_code==422
+
+
+def test_seed_restores_exact_product_links_without_duplicate_drug_records():
+    from app.db import Drug,seed
+    with Session.begin() as s:
+        drug=s.query(Drug).filter_by(formulary_code='1000997').one()
+        product_id=drug.id;drug.formulary_code=None
+    seed()
+    with Session() as s:
+        assert s.query(Drug).filter_by(formulary_code='1000997').one().id==product_id
+        assert s.query(Drug).filter(Drug.formulary_code.isnot(None)).count()==827

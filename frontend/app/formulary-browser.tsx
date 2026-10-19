@@ -29,7 +29,7 @@ export default function FormularyBrowser({canManage=false}:{canManage?:boolean})
       if(!response.ok)throw Error('บันทึกสถานะคลังไม่ได้');setRevision(value=>value+1);setMessage('บันทึกสถานะที่ผู้ตรวจระบุแล้ว ยังไม่เชื่อมยอดคงเหลือจริง');
     }catch(error){setMessage(error instanceof Error?error.message:'บันทึกไม่ได้');}finally{setBusy(false);}
   }
-  return <section data-testid="hospital-formulary"><h2>รายการยาจากไฟล์โรงพยาบาล</h2><p>แยกจากคลังจำลอง 10 รายการและกฎขนาดยา ชื่อยาในไฟล์ไม่ยืนยันสถานะในบัญชี ยาคงเหลือ หรือความเหมาะสมในการใช้แทนกัน</p>
+  return <section data-testid="hospital-formulary"><h2>บัญชียาโรงพยาบาลจากไฟล์ของคุณ</h2><p>โหลดรายการจากไฟล์โรงพยาบาลอัตโนมัติ แยกจากทะเบียนกฎขนาดยา ชื่อยาในไฟล์ไม่ยืนยันสถานะในบัญชี ยาคงเหลือ หรือความเหมาะสมในการใช้แทนกัน</p>
     {canManage&&<><label>นำเข้ารายการยา XLS<input type="file" accept=".xls" disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file);e.target.value='';}}/></label><p className="warning">ข้อมูลบน Vercel รุ่นนี้ยังเป็นฐานข้อมูลชั่วคราว อาจหายหรือไม่ตรงกันระหว่าง instances ต้องใช้ฐานข้อมูลถาวรก่อนใช้งานจริง ไม่อัปโหลดข้อมูลผู้ป่วย</p></>}
     <label>ค้นหายาโรงพยาบาล<input value={q} maxLength={200} onChange={e=>{setQ(e.target.value);setOffset(0);}} placeholder="ชื่อยา / ชื่อสามัญ / รหัสยา"/></label>
     <p>{loading?'กำลังค้นหา…':`พบ ${data?.matched??0} จาก ${data?.total??0} รายการ`}</p>{message&&<p>{message}</p>}

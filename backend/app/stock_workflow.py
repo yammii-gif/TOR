@@ -4,22 +4,29 @@ from datetime import datetime, timezone
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from .db import Session, Drug, Prescription, StockAlternative
+from .db import Session, Drug, Prescription, StockAlternative, FormularyItem
 from .clinical import RenalInput, calculate
+from .formulary import product_snapshot
 
 PENDING_STOCK=('WAITING_STOCK_ALTERNATIVE','ALTERNATIVE_PROPOSED')
 
-def drug_view(drug):
-    return dict(id=drug.id,name=drug.name,stock_status=drug.stock_status,
-                clinical_status=drug.status,label='SYNTHETIC INVENTORY')
+def product_for(s,drug):
+    item=s.get(FormularyItem,drug.formulary_code) if drug and drug.formulary_code else None
+    if not item or not item.present_in_latest_import:raise HTTPException(422,'เลือกผลิตภัณฑ์จากบัญชียาโรงพยาบาลปัจจุบัน')
+    return item
+
+
+def drug_view(drug,item):
+    return dict(id=drug.id,name=drug.name,clinical_status=drug.status,label='HOSPITAL FORMULARY',**product_snapshot(item))
 
 def prescription_view(s,record):
     proposals=[]
     for a in s.query(StockAlternative).filter_by(prescription_id=record.id).all():
         d=s.get(Drug,a.drug_id)
-        proposals.append(dict(id=a.id,drug_id=a.drug_id,drug=d.name,stock_status=d.stock_status,
+        item=s.get(FormularyItem,d.formulary_code) if d.formulary_code else None
+        proposals.append(dict(id=a.id,drug_id=a.drug_id,drug=d.name,stock_status=item.stock_status if item and item.present_in_latest_import else 'UNKNOWN',
                               indication=a.indication,rationale=a.rationale,status=a.status,
-                              proposed_by=a.proposed_by,created_at=a.created_at,
+                              proposed_by=a.proposed_by,created_at=a.created_at,formulary_snapshot=json.loads(a.formulary_snapshot),
                               clinical_status='PENDING_CLINICAL_VALIDATION',dose=None))
     return dict(id=record.id,patient=record.patient,drug=record.drug,proposal=record.proposal,
                 decision=record.decision,reason=record.reason,status=record.status,
@@ -28,7 +35,7 @@ def prescription_view(s,record):
                 source_snapshot=json.loads(record.source_snapshot),stock_alternatives=proposals)
 
 class StockUpdate(BaseModel):
-    status:Literal['IN_STOCK','OUT_OF_STOCK']
+    status:Literal['IN_STOCK','OUT_OF_STOCK','UNKNOWN']
 
 class AlternativeProposal(BaseModel):
     drug_id:int
@@ -46,16 +53,17 @@ def make_stock_router(roles,audit):
 
     @router.get('/inventory')
     def inventory(u=Depends(roles('physician','pharmacist','admin'))):
-        with Session() as s:return [drug_view(d) for d in s.query(Drug).order_by(Drug.id).all()]
+        with Session() as s:return [drug_view(d,item) for d,item in s.query(Drug,FormularyItem).join(FormularyItem,Drug.formulary_code==FormularyItem.code).filter(FormularyItem.present_in_latest_import.is_(True)).order_by(FormularyItem.display_name)]
 
     @router.post('/inventory/{drug_id}')
     def update_stock(drug_id:int,p:StockUpdate,u=Depends(roles('pharmacist','admin'))):
         with Session.begin() as s:
             d=s.get(Drug,drug_id)
-            if not d:raise HTTPException(404,'ไม่พบยาในคลังจำลอง')
-            previous=d.stock_status;d.stock_status=p.status
+            if not d:raise HTTPException(404,'ไม่พบยาในคลัง')
+            item=product_for(s,d)
+            previous=item.stock_status;item.stock_status=p.status;item.stock_checked_at=datetime.now(timezone.utc)
             audit(s,u,'STOCK_CHANGED',previous,p.status,d.name)
-            return drug_view(d)
+            return drug_view(d,item)
 
     @router.post('/prescriptions/{record_id}/stock-alternatives')
     def propose(record_id:int,p:AlternativeProposal,u=Depends(roles('pharmacist'))):
@@ -65,10 +73,11 @@ def make_stock_router(roles,audit):
             r=s.get(Prescription,record_id);d=s.get(Drug,p.drug_id)
             if not r or not d:raise HTTPException(404)
             if r.status not in PENDING_STOCK:raise HTTPException(409,'รายการนี้ไม่ได้รอทางเลือกกรณียาขาดคลัง')
-            if d.stock_status!='IN_STOCK':raise HTTPException(409,'ยาที่เสนอไม่มีในคลังจำลอง')
-            if d.name==r.drug:raise HTTPException(422,'เลือกยาที่ต่างจากรายการเดิม')
+            item=product_for(s,d)
+            if item.stock_status!='IN_STOCK':raise HTTPException(409,'ยาที่เสนอไม่มีในคลัง')
+            if d.name==r.drug or json.loads(r.source_snapshot).get('formulary_product',{}).get('code')==item.code:raise HTTPException(422,'เลือกยาที่ต่างจากรายการเดิม')
             a=StockAlternative(prescription_id=r.id,drug_id=d.id,proposed_by=u['name'],
-                               indication=p.indication.strip(),rationale=p.rationale.strip())
+                               indication=p.indication.strip(),rationale=p.rationale.strip(),formulary_snapshot=json.dumps(product_snapshot(item)))
             s.add(a);s.flush()
             previous=r.status;r.status='ALTERNATIVE_PROPOSED'
             audit(s,u,'PHARMACIST_STOCK_ALTERNATIVE',previous,r.status,
@@ -90,9 +99,12 @@ def make_stock_router(roles,audit):
                 return {'status':r.status}
             if not p.proposal.strip():raise HTTPException(422,'แพทย์ต้องกรอกข้อเสนอยาและวิธีใช้ของตนเองก่อนยืนยัน')
             drug=s.get(Drug,a.drug_id)
-            if drug.stock_status!='IN_STOCK':raise HTTPException(409,'ยาทางเลือกขาดคลังแล้ว กรุณาให้เภสัชกรเสนอใหม่')
+            item=product_for(s,drug)
+            if json.loads(a.formulary_snapshot).get('source_hash')!=item.source_hash:raise HTTPException(409,'บัญชียาเปลี่ยนหลังเสนอ กรุณาตรวจและเสนอใหม่')
+            if item.stock_status!='IN_STOCK':raise HTTPException(409,'ยาทางเลือกขาดคลังแล้ว กรุณาให้เภสัชกรเสนอใหม่')
             snapshot=json.loads(r.source_snapshot)
             snapshot['calculation']=calculate(RenalInput(**snapshot))
+            snapshot['formulary_product']=product_snapshot(item)
             if snapshot['calculation']['status']!='SIMULATION' and not p.override:
                 raise HTTPException(409,'ต้องตรวจสอบข้อมูลไต หรือแพทย์ยืนยัน Override พร้อมเหตุผล')
             previous=r.status

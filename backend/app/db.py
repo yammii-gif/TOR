@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, String, Text, DateTime, ForeignKey, LargeBinary, event
+from sqlalchemy import create_engine, String, Text, DateTime, ForeignKey, LargeBinary, UniqueConstraint, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 engine=create_engine(os.getenv('DATABASE_URL','sqlite:////tmp/renal-smart.db'), **({'connect_args':{'check_same_thread':False}} if os.getenv('DATABASE_URL','sqlite:').startswith('sqlite:') else {}))
 Session=sessionmaker(engine)
@@ -11,11 +11,13 @@ class Patient(Base):
     source:Mapped[str]=mapped_column(Text)
 class Drug(Base):
     __tablename__='drugs'
+    __table_args__=(UniqueConstraint('formulary_code',name='uq_drug_formulary'),)
     id:Mapped[int]=mapped_column(primary_key=True)
-    name:Mapped[str]=mapped_column(String(100),unique=True)
+    name:Mapped[str]=mapped_column(String(500),unique=True)
+    formulary_code:Mapped[str|None]=mapped_column(ForeignKey('formulary_items.code',name='fk_drug_formulary'),nullable=True)
     evidence:Mapped[str]=mapped_column(Text,default='{}')
     status:Mapped[str]=mapped_column(default='PENDING_CLINICAL_VALIDATION')
-    stock_status:Mapped[str]=mapped_column(default='IN_STOCK')
+    stock_status:Mapped[str]=mapped_column(default='UNKNOWN')
 class Rule(Base):
     __tablename__='rules'
     id:Mapped[int]=mapped_column(primary_key=True)
@@ -47,6 +49,7 @@ class StockAlternative(Base):
     indication:Mapped[str]
     rationale:Mapped[str]=mapped_column(Text)
     status:Mapped[str]=mapped_column(default='PROPOSED')
+    formulary_snapshot:Mapped[str]=mapped_column(Text,default='{}')
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
 class Audit(Base):
     __tablename__='audit'
@@ -83,8 +86,11 @@ def seed():
         import json
         if not s.get(Patient,'SYN-001'):
             s.add(Patient(id='SYN-001',source=json.dumps({'id':'SYN-001','name':'ผู้ป่วยจำลอง 001','age':65,'weight_kg':60,'sex':'female','scr':1.5,'egfr':38,'diagnosis':'เบาหวานชนิดที่ 2','allergies':[], 'medications':['Metformin'],'collected_at':datetime.now(timezone.utc).isoformat(),'verified':True,'stable':True,'dialysis':False,'actual_weight_appropriate':True,'unit':'mg/dL'},ensure_ascii=False)))
+        from .formulary import ensure_default_catalog
         for name in DRUGS:
-            if not s.query(Drug).filter_by(name=name).first(): s.add(Drug(name=name,stock_status='OUT_OF_STOCK' if name=='Sitagliptin' else 'IN_STOCK'))
+            if not s.query(Drug).filter_by(name=name).first(): s.add(Drug(name=name,stock_status='UNKNOWN'))
+        s.flush()
+        ensure_default_catalog(s)
 
 class FormularyItem(Base):
     __tablename__='formulary_items'
