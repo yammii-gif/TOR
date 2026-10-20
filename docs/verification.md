@@ -70,3 +70,15 @@ Backend 29 tests ผ่าน รวม HMAC session ข้าม memory stores,
 - KDIGO/NICE/NKF/UpToDateSearchยังถูกCONNECTproxy403 ไม่อ้างว่าแก้network policyได้หรือดึงไกด์ไลน์ใหม่จากเว็บแล้ว
 - ไม่มีmigrationใหม่ ใช้EvidenceRecordเก็บเอกสารเป็นDRAFT มีผู้ใช้/เวลา/audit และไม่เพิ่มapproved dose rules
 - Browser7testsผ่าน รวมอัปโหลดPDFสังเคราะห์ผ่านหน้าเว็บ ค้นคำพร้อมหน้าและcitation และยืนยันสถานะDRAFT ไม่ใช่clinical approval
+
+
+## รุ่น2.3 — ฐานข้อมูลถาวรและบัญชีรายบุคคล
+
+- Backend125testsผ่าน ครอบคลุมsalted password, server-authoritative roles, shared DB sessions/revocation, CSRF/Origin, throttling/expiry, password reset, last-admin protection, config fail-closed, validation redaction และidempotency/payload mismatch
+- Frontendlint/typecheck/productionbuild/Vercelstaticexportผ่าน Browser7workflowtestsและ2production-accounttestsผ่าน แก้ปุ่มคำนวณ/นำทางที่อาจถูกกดขณะยังโหลดข้อมูล โดยปิดปุ่มระหว่างรอ
+- Productionbrowsertestsใช้สองPythonworkersกับPostgreSQL16จริงและHTTPS certificateของtest CAที่trustโดยระบุชัด ไม่ปิดTLSverification Browserส่งrequestไปrealworkerผ่านroute transport ไม่mockresponsebody มีแต่ข้อมูลสังเคราะห์
+- ทดสอบproductionconfiguration/schema007/seed827/สร้างstaff/runtime roleผ่านscriptsจริง Readinessผ่านdatabase/schema/admin/leastprivilege และclinical_readyยังfalse Sessionจากworkerหนึ่งใช้กับอีกworkerได้ ออกจากระบบแล้วถูกเพิกถอนทั้งคู่
+- PostgreSQLauditUPDATEและTRUNCATEถูกblockจริง ทดสอบownerprepareซ้ำหลังใช้transaction advisory lockผ่าน; SQLite006→007บนสำเนาฐานข้อมูลเดิมรักษาใบสั่งเดิมและเพิ่มidentitytables/request_key
+- Encryptedbackupและrestoreผ่านCLIจริงด้วยpyrage+PostgreSQL16pg_dump/pg_restore กู้ในDBแยกที่ว่าง ตรวจจำนวนformulary/staff/audit/prescriptionsตรงต้นทาง ณ เวลาสำรอง ไม่ใช้ข้อมูลผู้ป่วยจริงหรือcredentialผู้ใช้
+- ไม่มีNeonaccount/productionDATABASE_URLหรือสิทธิ์Vercelของผู้ใช้ในเซสชันนี้ จึงยังไม่ได้ผูกฐานข้อมูลภายนอกจริง ตั้งproductionvariables ตรวจpublicdeployment หรือวางbackup schedulerให้แล้ว ดูproduction-vercel.mdสำหรับขั้นตอนที่เหลือ
+- ไม่มีapprovedACTIVEdrugrulesเพิ่ม ไม่มีHOSxP/LISintegrationที่ตรวจรับ และยังไม่เปิดreal-patientmode การผ่านsoftwaretestsไม่ใช่clinicalapproval แผนhostingฟรีไม่รับประกันSLA

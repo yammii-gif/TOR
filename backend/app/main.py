@@ -1,6 +1,13 @@
 import os, secrets, hashlib, json
 from datetime import datetime, timezone, timedelta
-from fastapi import FastAPI, Depends, HTTPException, Response, Cookie
+from fastapi import FastAPI, Depends, HTTPException, Response, Cookie, Request
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from contextlib import asynccontextmanager
+from sqlalchemy.exc import SQLAlchemyError,IntegrityError
+from .runtime import production,validate_configuration
+from . import identity
+from .operations import readiness
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -12,10 +19,34 @@ from .rule_specification import renal_rule_template
 from .formulary import product_snapshot
 from .medication_assessment import assess_medication, document_metadata
 from .stock_workflow import make_stock_router, prescription_view, PENDING_STOCK, product_for
-app=FastAPI(title='Renal Smart CDSS — SYNTHETIC DATA')
-app.add_middleware(CORSMiddleware,allow_origins=[os.getenv('FRONTEND_ORIGIN','http://localhost:3000')],allow_credentials=True,allow_methods=['GET','POST'],allow_headers=['Content-Type'])
+@asynccontextmanager
+async def lifespan(app):
+    validate_configuration()
+    yield
+
+app=FastAPI(title='Renal Smart CDSS — SYNTHETIC DATA',lifespan=lifespan)
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request,error):
+    return JSONResponse(status_code=422,content={'detail':[{'loc':list(e['loc']),'msg':e['msg'],'type':e['type']} for e in error.errors()]})
+
+@app.exception_handler(SQLAlchemyError)
+async def database_error(request,error):
+    return JSONResponse(status_code=503,content={'detail':'ฐานข้อมูลไม่พร้อมใช้งาน กรุณาลองใหม่หรือติดต่อผู้ดูแล'})
+
+@app.middleware('http')
+async def secure_headers(request,call_next):
+    response=await call_next(request)
+    response.headers['Cache-Control']='no-store'
+    response.headers['X-Content-Type-Options']='nosniff'
+    response.headers['X-Frame-Options']='DENY'
+    response.headers['Referrer-Policy']='same-origin'
+    if production():response.headers['Strict-Transport-Security']='max-age=31536000'
+    return response
+app.add_middleware(CORSMiddleware,allow_origins=[os.getenv('FRONTEND_ORIGIN','http://localhost:3000').rstrip('/')],allow_credentials=True,allow_methods=['GET','POST'],allow_headers=['Content-Type','X-CSRF-Token'])
 sessions={}
-def user(session: str|None=Cookie(default=None)):
+def user(request:Request,session: str|None=Cookie(default=None)):
+    if production():return identity.authenticate(request,session)
     entry=session_tokens.verify(session or '') if session_tokens.enabled() else sessions.get(session or '')
     if not entry or entry['expires']<datetime.now(timezone.utc): raise HTTPException(401,'กรุณาเข้าสู่ระบบ')
     return entry
@@ -29,10 +60,12 @@ def roles(*allowed):
 def audit(s,u,action,previous,new,comments='',record_id=None):
     s.add(Audit(user=u['name'],action=action,previous=previous,new=new,comments=comments,record_id=record_id))
 class Login(BaseModel):
-    role:str
-    password:str
+    role:str|None=Field(default=None,max_length=30)
+    username:str|None=Field(default=None,max_length=64)
+    password:str=Field(min_length=1,max_length=256)
 @app.post('/auth/login')
-def login(p:Login,response:Response):
+def login(p:Login,response:Response,request:Request):
+    if production():return identity.login(request,response,p.username,p.password)
     expected=os.getenv('DEMO_PASSWORD')
     if not expected: raise HTTPException(503,'ตั้งค่า DEMO_PASSWORD ก่อนเริ่มใช้งาน')
     if p.role not in ['physician','pharmacist','admin','researcher'] or not secrets.compare_digest(p.password,expected): raise HTTPException(401,'ข้อมูลเข้าสู่ระบบไม่ถูกต้อง')
@@ -46,14 +79,28 @@ def login(p:Login,response:Response):
     response.set_cookie('session',token,httponly=True,samesite='strict',secure=os.getenv('COOKIE_SECURE','false')=='true',max_age=14400)
     return {'role':p.role,'mode':'SIMULATION'}
 @app.post('/auth/logout')
-def logout(response:Response,session:str|None=Cookie(default=None)):
+def logout(response:Response,request:Request,session:str|None=Cookie(default=None)):
+    if production():return identity.logout(request,response,session)
     sessions.pop(session or '',None); response.delete_cookie('session'); return {'ok':True}
+@app.get('/auth/config')
+def auth_config():return {'mode':'accounts' if production() else 'demo','clinical_data_mode':'SYNTHETIC_DATA','app_version':'2.3'}
+
+@app.get('/auth/me')
+def me(u=Depends(user)):return {'name':u['name'],'role':u['role']}
+
+@app.get('/health/live')
+def liveness():return {'status':'alive'}
+
+@app.get('/health/ready')
+def ready():return readiness()
+
 @app.get('/health')
 def health():
+    if production():return readiness()
     with Session() as s: s.execute(select(Drug).limit(1))
     return {'status':'ok','mode':'SYNTHETIC DATA'}
 @app.get('/patients')
-def patients(u=Depends(user)):
+def patients(u=Depends(roles('physician','pharmacist','admin'))):
     with Session() as s: return [json.loads(p.source) for p in s.query(Patient).all()]
 @app.post('/renal/calculate')
 def renal(p:RenalInput,u=Depends(user)): return calculate(p)
@@ -81,13 +128,15 @@ class Decision(BaseModel):
     decision:str
     reason:str=Field(default='',max_length=2000)
     patient_input:RenalInput|None=None
-@app.post('/prescriptions')
-def prescribe(p:Decision,u=Depends(roles('physician'))):
+def _prescribe(p,u,request_key,fingerprint):
     if p.decision not in ['MODIFY','OVERRIDE','ACCEPT','ALTERNATIVE']: raise HTTPException(422,'Invalid decision')
     if p.decision in ['ACCEPT','ALTERNATIVE']: raise HTTPException(409,'No validated recommendation or alternative available')
     if not p.proposal.strip(): raise HTTPException(422,'กรอกข้อเสนอแพทย์ก่อนยืนยัน')
     if p.decision=='OVERRIDE' and not p.reason.strip(): raise HTTPException(422,'ต้องระบุเหตุผล')
     with Session.begin() as s:
+        if request_key:
+            previous=s.query(Prescription).filter_by(request_key=request_key).first()
+            if previous:return prescription_result(previous,fingerprint,True)
         source=s.get(Patient,'SYN-001')
         if not source: raise HTTPException(409,'Seed synthetic patient first')
         snapshot=json.loads(source.source)
@@ -97,13 +146,35 @@ def prescribe(p:Decision,u=Depends(roles('physician'))):
         if not drug: raise HTTPException(422,'เลือกผลิตภัณฑ์จากบัญชียาโรงพยาบาล')
         item=product_for(s,drug)
         snapshot['formulary_product']=product_snapshot(item)
+        if request_key:snapshot['_request_fingerprint']=fingerprint
         if snapshot['calculation']['status']!='SIMULATION' and p.decision!='OVERRIDE':
             raise HTTPException(409,'ตรวจสอบข้อมูลไตก่อนยืนยัน หรือบันทึก Override พร้อมเหตุผล')
         status='WAITING_STOCK_ALTERNATIVE' if item.stock_status=='OUT_OF_STOCK' else 'PHYSICIAN_FINALIZED'
         values=p.model_dump(exclude={'patient_input'});values['drug']=drug.name
-        record=Prescription(**values,source_snapshot=json.dumps(snapshot),status=status,finalized_at=datetime.now(timezone.utc) if status=='PHYSICIAN_FINALIZED' else None); s.add(record); s.flush()
+        record=Prescription(**values,request_key=request_key,source_snapshot=json.dumps(snapshot),status=status,finalized_at=datetime.now(timezone.utc) if status=='PHYSICIAN_FINALIZED' else None); s.add(record); s.flush()
         audit(s,u,'PHYSICIAN_'+('FINALIZED' if status=='PHYSICIAN_FINALIZED' else 'STOCK_REQUEST'),'DRAFT',status,p.reason,record.id)
-        return {'id':record.id,'status':record.status}
+        return prescription_result(record,fingerprint,False)
+
+def prescription_result(record,fingerprint,replayed):
+    previous=json.loads(record.source_snapshot).get('_request_fingerprint')
+    if previous and previous!=fingerprint:raise HTTPException(409,'คำขอเดิมมีข้อมูลต่างกัน กรุณาเริ่มข้อเสนอใหม่')
+    return {'id':record.id,'status':record.status,'replayed':replayed}
+
+@app.post('/prescriptions')
+def prescribe(p:Decision,request:Request,u=Depends(roles('physician'))):
+    raw_key=request.headers.get('idempotency-key','')
+    if production() and not raw_key:raise HTTPException(422,'ต้องมี Idempotency-Key เพื่อป้องกันการส่งซ้ำ')
+    if len(raw_key)>200:raise HTTPException(422,'Idempotency-Keyยาวเกินขอบเขต')
+    key=hashlib.sha256((u['name']+'\x00'+raw_key).encode()).hexdigest() if raw_key else None
+    fingerprint=hashlib.sha256(json.dumps(p.model_dump(mode='json'),sort_keys=True).encode()).hexdigest()
+    try:return _prescribe(p,u,key,fingerprint)
+    except IntegrityError:
+        if key:
+            with Session() as s:
+                previous=s.query(Prescription).filter_by(request_key=key).first()
+                if previous:return prescription_result(previous,fingerprint,True)
+        raise
+
 @app.get('/prescriptions')
 def prescriptions(u=Depends(roles('physician','pharmacist','admin'))):
     with Session() as s: return [prescription_view(s,p) for p in s.query(Prescription).order_by(Prescription.id).all()]
@@ -191,3 +262,6 @@ from .formulary import make_formulary_router
 app.include_router(make_formulary_router(roles,audit))
 from .guidelines import make_guideline_router
 app.include_router(make_guideline_router(roles,audit,user))
+
+from .staff_api import make_staff_router
+app.include_router(make_staff_router(roles))

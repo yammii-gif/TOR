@@ -11,3 +11,10 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/out/
 .vercel/
+
+.env.*
+!.env.example
+!.env.production.example
+*.age
+*.agekey
+*.dump

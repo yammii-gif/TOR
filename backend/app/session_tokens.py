@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 
 def enabled():
-    return os.getenv('SERVERLESS_DEMO') == 'true'
+    return os.getenv('SERVERLESS_DEMO')=='true' and os.getenv('APP_ENV')!='production'
 
 
 def _key():

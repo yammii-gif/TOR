@@ -83,7 +83,8 @@ def test_signed_session_survives_process_memory_loss(monkeypatch,role):
     monkeypatch.setenv('SERVERLESS_DEMO','true')
     monkeypatch.setenv('SESSION_SECRET','synthetic-test-session-key-32-chars-minimum')
     c=client(role);main.sessions.clear()
-    assert c.get('/patients').status_code==200
+    assert c.get('/auth/me').status_code==200
+    assert c.get('/patients').status_code==(403 if role=='researcher' else 200)
     if role!='physician':
         assert c.post('/prescriptions',json={'drug':METFORMIN_PRODUCT,'proposal':'demo','decision':'MODIFY'}).status_code==403
     c.post('/auth/logout')

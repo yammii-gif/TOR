@@ -4,6 +4,8 @@
 
 ## เปิดออนไลน์
 
+รุ่น2.3ใช้ Vercel เดิมร่วมกับ PostgreSQL ภายนอกแบบฟรีและบัญชีรายบุคคลตามที่เลือก อ่าน [คู่มือตั้งค่าฐานข้อมูลถาวรและบัญชีผู้ใช้](docs/production-vercel.md) ต้องตั้งค่า secure variables ก่อน โหมดผู้ป่วยยังเป็น SYNTHETIC
+
 สำหรับ Vercel อ่าน [วิธี deploy เดโม full-stack บน Vercel](docs/vercel-demo.md) ใช้ root repository และตั้ง DEMO_PASSWORD/SESSION_SECRET ข้อมูลในเดโม serverless เป็นข้อมูลชั่วคราว ไม่รับประกันการแชร์ข้าม instances
 
 หากไม่ต้องการเพิ่มบัตรใน Render ให้ใช้ [Hugging Face Spaces แบบ CPU basic ฟรี](docs/huggingface-free.md) โดยอัปโหลด Dockerfile ไฟล์เดียวจาก repository นี้ ไม่ต้องสร้างเว็บใหม่
@@ -51,7 +53,7 @@ npm run build
 - Thai UI 12 เมนู พร้อม dashboard/filter/CSV export
 - FastAPI, SQLAlchemy models, Alembic initial migration, PostgreSQL config
 - คำนวณ Cockcroft–Gault และ CKD-EPI 2021 eGFR จาก input จริง แยก reported eGFR จากแล็บ, แปลงหน่วย SCr, ตรวจแล็บเก่า/อนาคต ข้อมูลไม่ครบ ไตไม่คงที่/ฟอกไต และการยืนยันน้ำหนัก
-- แพทย์ยืนยันข้อเสนอตนเองได้ทันที; เภสัชกรเสนอทางเลือกกรณียาขาดคลัง มี audit append-only ระดับ ORM; historical SUBMITTED ยังรองรับการคืน/ปฏิเสธ
+- แพทย์ยืนยันข้อเสนอตนเองได้ทันที; เภสัชกรเสนอทางเลือกกรณียาขาดคลัง มี audit append-only ระดับ ORM และ PostgreSQL triggers ในโหมดproduction; historical SUBMITTED ยังรองรับการคืน/ปฏิเสธ
 - Session cookie HttpOnly, role checks, expiration, input validation
 - ฐานข้อมูลยา 10 รายการที่ยังไม่ยืนยัน, versioned draft rules, ปิดการอนุมัติ/เปิดใช้งานกฎ
 - Evidence adapters: UpToDate Public Search, NIDDK, KDIGO, NICE, DailyMed, PubMed เก็บต้นฉบับ/checksum/เวลาเป็น DRAFT เมื่อดึงสำเร็จจริง; Full Clinical Topics/Lexidrug/Micromedex แยกเป็น LICENSE_REQUIRED; บันทึก network failure และ SOURCE_CONFLICT
@@ -63,8 +65,8 @@ npm run build
 - Patient API เป็นข้อมูลจำลอง ไม่เชื่อม HOSxP/LIS จริง หน้า Auto Lab เป็น payload simulation
 - `desktop/simulator.py --ocr` ใช้ Tesseract OCR ในเครื่อง (`tesseract-ocr` ต้องติดตั้ง) สร้างภาพในหน่วยความจำ ไม่จับหน้าจอจริง
 - ไม่มี Windows window allowlist capture agent ที่ผ่านการทดสอบ; ต้องพัฒนาและตรวจสอบแยก
-- Shared demo password และ role selection ใช้เพื่อเดโมเท่านั้น ไม่ใช่ production identity; sessions อยู่ใน memory
-- Audit ป้องกันแก้ไขผ่าน ORM/API; DBA ยังแก้ฐานข้อมูลได้ ต้องใช้ DB privileges/triggers/WORM ก่อน production
+- Shared demo password/role selection และ sessions ชั่วคราวใช้เฉพาะdemo; productionมีบัญชีรายบุคคลและsessionในPostgreSQL แต่ยังต้องตั้งค่าบนhostingจริง
+- Productionเพิ่มDB privileges/triggersป้องกันแก้auditแล้ว; DBAยังเปลี่ยนschemaได้ จึงต้องมีgovernanceและauditภายนอกเพิ่มเติม
 - ไม่มี Excel native, before-after cohorts, satisfaction collection, measured OCR accuracy, clinical alert/error metrics; ค่าไม่มีข้อมูลเป็น null
 - ไม่อ้างว่า Lexidrug/Micromedex หรือฉลากยาปัจจุบันถูกดึงแล้ว
 
@@ -105,3 +107,9 @@ Cloud onboarding UI ของเซสชันนี้ไม่มี Preview/
 เพิ่มนำเข้าPDFและดึงPDFจากแหล่งสาธารณะที่กำหนด ค้นข้อความพร้อมหน้าPDF/citation/SHA-256 และดาวน์โหลดต้นฉบับได้ที่ **ฐานความรู้ยา / ไกด์ไลน์** มีสคริปต์ `scripts/fetch-guideline.py` สำหรับเครื่องที่เข้าถึงแหล่งข้อมูลได้ตามสิทธิ์ ดู [คู่มือคลังไกด์ไลน์](docs/guideline-library.md)
 
 ทดสอบเอกสารไทยที่แนบ106หน้าจริงแล้วในฐานข้อมูล local ไม่ถือว่าได้นำเข้าไปยังVercelอัตโนมัติ เว็บไซต์ภายนอกยังถูกcloud proxyตอบ403 ทุกเอกสารใหม่คงเป็นDRAFTและไม่เปิดกฎยาเอง
+
+## รุ่น2.3: เตรียม Vercel + PostgreSQL ถาวร + บัญชีรายบุคคล
+
+เพิ่มโหมด `APP_ENV=production` ที่ไม่ยอมใช้SQLite/รหัสผ่านเดโม ใช้บัญชีรายบุคคล sessionในDBที่เพิกถอนได้ CSRF/Origin checks login throttling และการป้องกันข้อเสนอซ้ำ มีmigration007และPostgreSQLaudit guards พร้อมเครื่องมือสร้างผู้ดูแล runtime role และencrypted backup/restore อ่าน [คู่มือติดตั้งproductionบนVercel](docs/production-vercel.md) และ [.env.production.example](.env.production.example)
+
+ยังต้องสร้าง/ตั้งค่าฐานข้อมูลภายนอกจริงและsecurevariablesของVercel ไม่ได้สร้างบัญชีNeonหรือเชื่อมproductiondatabaseให้แล้ว โหมดผู้ป่วยยังเป็นsyntheticและไม่มีกฎยาที่รับรอง จึงยังไม่ใช่การอนุมัติใช้งานผู้ป่วยจริง

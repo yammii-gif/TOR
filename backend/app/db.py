@@ -2,7 +2,24 @@ import os
 from datetime import datetime, timezone
 from sqlalchemy import create_engine, String, Text, DateTime, ForeignKey, LargeBinary, UniqueConstraint, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
-engine=create_engine(os.getenv('DATABASE_URL','sqlite:////tmp/renal-smart.db'), **({'connect_args':{'check_same_thread':False}} if os.getenv('DATABASE_URL','sqlite:').startswith('sqlite:') else {}))
+database_url=os.getenv('DATABASE_URL','sqlite:////tmp/renal-smart.db')
+if database_url.startswith('postgres://'):database_url=database_url.replace('postgres://','postgresql+psycopg://',1)
+elif database_url.startswith('postgresql://'):database_url=database_url.replace('postgresql://','postgresql+psycopg://',1)
+if os.getenv('APP_ENV')=='production':
+    from .runtime import validate_configuration
+    validate_configuration()
+if database_url.startswith('sqlite:'):
+    engine=create_engine(database_url,connect_args={'check_same_thread':False},pool_pre_ping=True)
+else:
+    import ssl
+    from sqlalchemy.engine import make_url
+    connection_options={'connect_timeout':5}
+    if make_url(database_url).query.get('sslmode')=='verify-full' and not make_url(database_url).query.get('sslrootcert'):
+        certificate=ssl.get_default_verify_paths().cafile
+        if not certificate:raise ValueError('System CA certificates unavailable; configure a trusted sslrootcert')
+        connection_options['sslrootcert']=certificate
+    engine=create_engine(database_url,pool_pre_ping=True,pool_size=2,max_overflow=0,pool_timeout=5,pool_recycle=300,connect_args=connection_options)
+
 Session=sessionmaker(engine)
 class Base(DeclarativeBase): pass
 class Patient(Base):
@@ -28,6 +45,8 @@ class Rule(Base):
     reviewer:Mapped[str|None]=mapped_column(nullable=True)
 class Prescription(Base):
     __tablename__='prescriptions'
+    __table_args__=(UniqueConstraint('request_key',name='uq_prescription_request_key'),)
+    request_key:Mapped[str|None]=mapped_column(String(64),nullable=True)
     id:Mapped[int]=mapped_column(primary_key=True)
     patient:Mapped[str]=mapped_column(default='SYN-001')
     department:Mapped[str]=mapped_column(default='อายุรกรรม')
@@ -110,3 +129,28 @@ class FormularyItem(Base):
     stock_checked_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True),nullable=True)
     present_in_latest_import:Mapped[bool]=mapped_column(default=True)
     imported_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+
+class StaffUser(Base):
+    __tablename__='staff_users'
+    id:Mapped[int]=mapped_column(primary_key=True)
+    username:Mapped[str]=mapped_column(String(64),unique=True)
+    password_hash:Mapped[str]=mapped_column(Text)
+    role:Mapped[str]=mapped_column(String(30))
+    enabled:Mapped[bool]=mapped_column(default=True)
+    auth_version:Mapped[int]=mapped_column(default=1)
+    created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+
+class StaffSession(Base):
+    __tablename__='staff_sessions'
+    token_hash:Mapped[str]=mapped_column(String(64),primary_key=True)
+    user_id:Mapped[int]=mapped_column(ForeignKey('staff_users.id'))
+    csrf_hash:Mapped[str]=mapped_column(String(64))
+    auth_version:Mapped[int]
+    expires_at:Mapped[datetime]=mapped_column(DateTime(timezone=True))
+    created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+
+class AuthAttempt(Base):
+    __tablename__='auth_attempts'
+    bucket:Mapped[str]=mapped_column(String(64),primary_key=True)
+    attempts:Mapped[int]
+    window_started:Mapped[datetime]=mapped_column(DateTime(timezone=True))

@@ -12,3 +12,9 @@ frontend/playwright-report
 .env
 **/.env
 **/*.db
+
+.env.*
+**/.env.*
+*.age
+*.agekey
+*.dump

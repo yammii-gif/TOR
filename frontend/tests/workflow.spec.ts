@@ -114,7 +114,7 @@ test('knowledge base shows licensed source restriction without claiming retrieva
  await expect(source).toContainText('LICENSE_REQUIRED');
  await source.getByRole('button',{name:'ตรวจสถานะสิทธิ์'}).click();
  await expect(page.getByRole('heading',{name:'UpToDate — Full Clinical Topics · LICENSE_REQUIRED'}).first()).toBeVisible();
- await expect(page.getByText('ยังไม่มีการเชื่อมต่อที่ได้รับอนุญาตของสถาบัน ไม่มีการดึงเนื้อหาหรือข้ามการเข้าสู่ระบบ')).toBeVisible();
+ await expect(page.getByText('ยังไม่มีการเชื่อมต่อที่ได้รับอนุญาตของสถาบัน ไม่มีการดึงเนื้อหาหรือข้ามการเข้าสู่ระบบ').first()).toBeVisible();
 });
 
 test('assessment appears automatically and document findings never imply approval',async({page})=>{
@@ -123,7 +123,7 @@ test('assessment appears automatically and document findings never imply approva
  await page.getByRole('button',{name:'เข้าสู่ระบบ',exact:true}).click();
  await expect(page.getByText('ผู้ใช้งาน: physician')).toBeVisible();
  await page.getByRole('button',{name:/พื้นที่ทำงานแพทย์/}).click();
- await expect(page.getByText('รุ่น 2.2 · บัญชียาและคลังไกด์ไลน์')).toBeVisible();
+ await expect(page.getByText('รุ่น 2.3 · บัญชีรายบุคคลและฐานข้อมูลถาวร')).toBeVisible();
  await expect(page.getByText('เลือกผลิตภัณฑ์จากบัญชีโรงพยาบาล 827 รายการ')).toBeVisible();
  const assessment=page.getByTestId('medication-assessment');
  await expect(assessment.locator('.decision-legend .decision-green')).toContainText('ใช้ยาเดิมต่อได้');

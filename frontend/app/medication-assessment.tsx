@@ -1,4 +1,5 @@
 'use client';
+import {apiFetch} from './api-client';
 import {useEffect,useState} from 'react';
 type Row=Record<string,unknown>;
 type Finding={drug:string;section:string;pdf_pages:number[];printed_pages:number[];exact_excerpt:string;limitation:string;comparison_value:number|null;comparison_basis:string;matched_band:{source_statement:string}|null;source:{title:string;version_note:string;sha256:string}};
@@ -11,7 +12,7 @@ export default function MedicationAssessment({patient,drug,indication}:{patient:
     const controller=new AbortController();
     const timer=setTimeout(async()=>{
       try{
-        const response=await fetch('/api/assess',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:input,signal:controller.signal});
+        const response=await apiFetch('/api/assess',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:input,signal:controller.signal});
         const data=await response.json();
         if(!response.ok)throw Error('ข้อมูลไม่ครบหรือไม่ผ่านการตรวจสอบ กรุณาตรวจอายุ น้ำหนัก SCr หน่วย และเวลาแล็บ');
         if(!controller.signal.aborted)setState({input,data});

@@ -1,4 +1,5 @@
 'use client';
+import {apiFetch} from './api-client';
 import {useEffect,useState} from 'react';
 type Item={code:string;display_name:string;generic_name:string;strength:string;dosage_form:string;stock_status:string;stock_checked_at:string|null;source_stock_flag:string;source_account_flag:string};
 type Result={total:number;matched:number;items:Item[]};
@@ -8,7 +9,7 @@ export default function FormularyBrowser({canManage=false}:{canManage?:boolean})
   useEffect(()=>{
     const controller=new AbortController();setLoading(true);
     const timer=setTimeout(async()=>{try{
-      const response=await fetch('/api/formulary?'+new URLSearchParams({q,offset:String(offset),limit:'20'}),{credentials:'include',signal:controller.signal});
+      const response=await apiFetch('/api/formulary?'+new URLSearchParams({q,offset:String(offset),limit:'20'}),{credentials:'include',signal:controller.signal});
       if(!response.ok)throw Error('ไม่สามารถโหลดบัญชียาได้');
       const result=await response.json();if(!controller.signal.aborted){setData(result);setLoading(false);}
     }catch(error){if(!controller.signal.aborted){setMessage(error instanceof Error?error.message:'โหลดไม่ได้');setLoading(false);}}},250);
@@ -18,14 +19,14 @@ export default function FormularyBrowser({canManage=false}:{canManage?:boolean})
     if(file.size>8*1024*1024){setMessage('ไฟล์ต้องไม่เกิน 8 MB');return;}
     setBusy(true);setMessage('กำลังนำเข้า…');
     try{
-      const response=await fetch('/api/formulary/import-xls',{method:'POST',credentials:'include',headers:{'Content-Type':'application/vnd.ms-excel'},body:file});
+      const response=await apiFetch('/api/formulary/import-xls',{method:'POST',credentials:'include',headers:{'Content-Type':'application/vnd.ms-excel'},body:file});
       const result=await response.json();if(!response.ok)throw Error(result.detail||'นำเข้าไม่ได้');
       setMessage(`นำเข้า ${result.imported} รายการ • ไม่ถือว่ามีของในคลังหรือเป็นยาทดแทนที่รับรอง`);setOffset(0);setRevision(value=>value+1);
     }catch(error){setMessage(error instanceof Error?error.message:'นำเข้าไม่ได้');}finally{setBusy(false);}
   }
   async function stock(item:Item,status:string){
     setBusy(true);try{
-      const response=await fetch(`/api/formulary/${encodeURIComponent(item.code)}/stock`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+      const response=await apiFetch(`/api/formulary/${encodeURIComponent(item.code)}/stock`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
       if(!response.ok)throw Error('บันทึกสถานะคลังไม่ได้');setRevision(value=>value+1);setMessage('บันทึกสถานะที่ผู้ตรวจระบุแล้ว ยังไม่เชื่อมยอดคงเหลือจริง');
     }catch(error){setMessage(error instanceof Error?error.message:'บันทึกไม่ได้');}finally{setBusy(false);}
   }

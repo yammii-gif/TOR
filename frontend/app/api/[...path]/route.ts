@@ -11,7 +11,7 @@ async function proxy(request: NextRequest) {
   target.pathname = path;
   target.search = request.nextUrl.search;
   const headers = new Headers();
-  for (const name of ['content-type', 'cookie']) {
+  for (const name of ['content-type','cookie','origin','x-csrf-token','idempotency-key']) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
@@ -25,7 +25,7 @@ async function proxy(request: NextRequest) {
       signal: AbortSignal.timeout(30000),
     });
     const output = new Headers({ 'Cache-Control': 'no-store' });
-    for (const name of ['content-type', 'content-disposition']) {
+    for (const name of ['content-type','content-disposition','x-content-type-options','x-frame-options','referrer-policy','strict-transport-security']) {
       const value = upstream.headers.get(name);
       if (value) output.set(name, value);
     }

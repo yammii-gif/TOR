@@ -13,13 +13,13 @@
 
 | งาน | สถานะปัจจุบัน | สิ่งที่ต้องตรวจรับ |
 | --- | --- | --- |
-| บัญชีรายบุคคล | มีเฉพาะ demo password + role selector | Hospital SSO/OIDC, staff roles, revocation, access review |
-| ฐานข้อมูล | Postgres รองรับ migrations; Vercel เดโมใช้ /tmp SQLite | ฐานข้อมูลถาวรของหน่วยงาน backup/restore, encryption, retention |
+| บัญชีรายบุคคล | รุ่น2.3มีstaff accounts, DB sessions, roles/revocation; รอติดตั้งจริง | account lifecycle/access review; เตรียมSSO/OIDCภายหลังหากมี |
+| ฐานข้อมูล | รุ่น2.3รองรับPostgreSQLถาวรและencrypted backup/restore; ยังไม่ผูกDBผู้ใช้ | ตั้งค่าprovider/regionที่อนุมัติ ทดสอบrestoreจริง กำหนดretention/SLA |
 | HOSxP/LIS | simulator + local PNG ROI reader | authorized read-only adapter ก่อน OCR, patient/encounter mapping, units, timestamps |
 | Windows OCR | ไม่มี live window capture ที่ตรวจรับแล้ว | signed agent, allowlisted process/region, explicit start/pause/stop, field accuracy, identity-change quarantine |
 | คำนวณ | CG และ CKD-EPI2021 พร้อม automated tests | institution-reviewed specs; AKI/dialysis/body size/weight context; independent reference comparison |
 | กฎยา | ไม่มี approved active dose rules | เภสัชกร/แพทย์ทบทวนหลักฐานและ version, indication, measure, thresholds, contraindications, interactions และ monitoring |
-| ความปลอดภัย | session cookie + role checks + ORM audit | threat model, penetration testing, DB access policy, tamper-resistant audit, PDPA/data governance |
+| ความปลอดภัย | DB sessions/CSRF/throttling/runtime role/PostgreSQL audit guardsในรุ่น2.3 | threat model, penetration testing, DB access policy, external audit, PDPA/data governance |
 | คลังกายภาพ | บัญชีจากไฟล์827ผลิตภัณฑ์พร้อม UNKNOWN / ผลตรวจ manual | authorized formulary/stock integration, freshness, race/conflict policy |
 
 อย่าส่ง HN หรือภาพผู้ป่วยจริงเข้าบริการ Vercel เดโมนี้ระหว่างรอรายการข้างต้น การติดตั้งจริงควรอยู่ในเครือข่าย/hosting ที่หน่วยงานอนุมัติ พร้อม HTTPS และฐานข้อมูลถาวร สิทธิ์ read-only HOSxP/LIS ต้องแยกจากสิทธิ์เขียนใบสั่งยา
