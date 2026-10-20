@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from .db import Session, Drug, EvidenceRecord
+from sqlalchemy.orm import defer
 
 SOURCES={
     'uptodate_search':{'name':'UpToDate — Public Search','url':'https://www.uptodate.com/contents/search','category':'หน้าค้นหาสาธารณะ ไม่ใช่บทความเต็มหรือกฎขนาดยา','licensed':False},
@@ -80,7 +81,7 @@ def make_evidence_router(roles,audit,user):
 
     @router.get('/evidence')
     def records(u=Depends(user)):
-        with Session() as s:return [record_view(r) for r in s.query(EvidenceRecord).order_by(EvidenceRecord.id.desc()).limit(100).all()]
+        with Session() as s:return [record_view(r) for r in s.query(EvidenceRecord).options(defer(EvidenceRecord.raw_content)).order_by(EvidenceRecord.id.desc()).limit(100).all()]
 
     @router.post('/evidence/retrieve')
     def retrieve(p:Retrieval,u=Depends(roles('physician','pharmacist','admin'))):

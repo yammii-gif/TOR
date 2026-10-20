@@ -61,3 +61,12 @@ Backend 29 tests ผ่าน รวม HMAC session ข้าม memory stores,
 - SQLite005→006บนสำเนาฐานข้อมูลเดิมรักษาประวัติใบสั่งและเชื่อม827ผลิตภัณฑ์ PostgreSQL16 upgrade006/seedซ้ำ/ขั้นdowngrade005แล้วupgrade006ผ่าน
 - UIมีป้ายรุ่น2.1 คำอธิบายสีและสถานะคลังยาที่เลือก ถ้ายังเห็นรุ่นเก่าต้องตรวจsource commitของdeployment ไม่ถือว่าpush GitHubแล้วเป็นหลักฐานว่าVerceldeployสำเร็จ
 - ไม่มี clinical dose rule ที่ได้รับอนุมัติเพิ่มขึ้น และข้อมูล manual stock/prescription ยังต้องฐานข้อมูลถาวรใน deploymentจริง
+
+## รุ่น2.2 — คลังไกด์ไลน์ PDF
+
+- Backend109testsผ่าน รวมPDF import/search/page citations/checksum/raw download/duplicate audit/role validation/encrypted-file rejection/URL allowlist และNETWORK_BLOCKEDที่ไม่อ้างว่าได้ต้นฉบับ
+- Frontendlint/typecheck/productionbuild/Vercelstaticexportผ่าน
+- นำเข้าPDFไทยจริง106หน้าผ่านAPIในlocal instance ข้อความค้นได้104หน้า Metforminพบ8หน้า และdownloadคืนbytesตรงต้นฉบับ ไม่ส่งPDFนี้ไปrepositoryหรือhostingจริง
+- KDIGO/NICE/NKF/UpToDateSearchยังถูกCONNECTproxy403 ไม่อ้างว่าแก้network policyได้หรือดึงไกด์ไลน์ใหม่จากเว็บแล้ว
+- ไม่มีmigrationใหม่ ใช้EvidenceRecordเก็บเอกสารเป็นDRAFT มีผู้ใช้/เวลา/audit และไม่เพิ่มapproved dose rules
+- Browser7testsผ่าน รวมอัปโหลดPDFสังเคราะห์ผ่านหน้าเว็บ ค้นคำพร้อมหน้าและcitation และยืนยันสถานะDRAFT ไม่ใช่clinical approval

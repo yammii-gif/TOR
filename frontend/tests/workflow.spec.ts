@@ -123,7 +123,7 @@ test('assessment appears automatically and document findings never imply approva
  await page.getByRole('button',{name:'เข้าสู่ระบบ',exact:true}).click();
  await expect(page.getByText('ผู้ใช้งาน: physician')).toBeVisible();
  await page.getByRole('button',{name:/พื้นที่ทำงานแพทย์/}).click();
- await expect(page.getByText('รุ่น 2.1 · บัญชียาโรงพยาบาล')).toBeVisible();
+ await expect(page.getByText('รุ่น 2.2 · บัญชียาและคลังไกด์ไลน์')).toBeVisible();
  await expect(page.getByText('เลือกผลิตภัณฑ์จากบัญชีโรงพยาบาล 827 รายการ')).toBeVisible();
  const assessment=page.getByTestId('medication-assessment');
  await expect(assessment.locator('.decision-legend .decision-green')).toContainText('ใช้ยาเดิมต่อได้');
@@ -143,4 +143,22 @@ test('assessment appears automatically and document findings never imply approva
  await expect(assessment).toContainText('NO_VALIDATED_ALTERNATIVE');
  await page.getByLabel('ข้อบ่งใช้สำหรับประเมินยา').fill('');
  await expect(assessment.getByTestId('medication-verdict')).toContainText('ระบุชื่อยาและข้อบ่งใช้ก่อนประเมิน');
+});
+
+test('guideline PDF imports and returns searchable page citations without clinical approval',async({page})=>{
+ await page.goto('/');
+ await page.locator('input[type=password]').fill(process.env.DEMO_PASSWORD||'renal-demo-local');
+ await page.getByRole('button',{name:'เข้าสู่ระบบ',exact:true}).click();
+ await expect(page.getByText('ผู้ใช้งาน: physician')).toBeVisible();
+ await page.getByRole('button',{name:/ฐานความรู้ยา/}).click();
+ const library=page.getByTestId('guideline-library');
+ await library.getByLabel('ชื่อไกด์ไลน์',{exact:true}).fill('SYNTHETIC guideline browser check');
+ await library.getByLabel('ฉบับ/ปีที่ปรากฏในเอกสาร (ยังรอผู้ทบทวนยืนยัน)').fill('fixture-v1');
+ await library.getByLabel('นำเข้าไกด์ไลน์ PDF',{exact:true}).setInputFiles('tests/fixtures/synthetic-guideline.pdf');
+ await expect(library).toContainText('SYNTHETIC guideline browser check · DRAFT');
+ await library.getByLabel('ค้นข้อความในไกด์ไลน์',{exact:true}).fill('renal');
+ await library.getByRole('button',{name:'ค้นพร้อมเลขหน้า',exact:true}).click();
+ await expect(library.getByRole('heading',{name:'หน้า PDF 1',exact:true})).toBeVisible();
+ await expect(library).toContainText('SYNTHETIC guideline: renal assessment. Not a clinical rule.');
+ await expect(library).toContainText('SHA-256');
 });

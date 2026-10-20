@@ -189,3 +189,5 @@ from .evidence_sources import make_evidence_router
 app.include_router(make_evidence_router(roles,audit,user))
 from .formulary import make_formulary_router
 app.include_router(make_formulary_router(roles,audit))
+from .guidelines import make_guideline_router
+app.include_router(make_guideline_router(roles,audit,user))

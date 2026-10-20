@@ -9,3 +9,4 @@ pytest==8.3.4
 pillow==11.1.0
 pytesseract==0.3.13
 xlrd==2.0.1
+pypdf==6.21.1
